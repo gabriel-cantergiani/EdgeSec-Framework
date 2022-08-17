@@ -1,8 +1,15 @@
 package br.pucrio.inf.lac.edgesec
 
+import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.decodeByteArrayToHexString
+import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.decodeToInt
+import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.encodeToByteArray
+import java.sql.DriverManager.println
+import java.util.*
+
 class EdgeSec() : IEdgeSec {
 
     private val TAG = "EdgeSec"
+    private val EdgeSecVersion = "1.0"
     private var gatewayID: String = "";
     private var transportPlugin: ITransportPlugin? = null;
     private var cryptoPlugins: ArrayList<ICryptographicPlugin>? = null;
@@ -11,6 +18,7 @@ class EdgeSec() : IEdgeSec {
     private var authenticationPackage: AuthenticationPackage? = null;
     private var authorization: Authorization? = null;
     private var secureConnections: ArrayList<SecureConnection>? = null;
+    private var compatibleDevices: ArrayList<String>? = null;
 
     init {
     }
@@ -20,49 +28,73 @@ class EdgeSec() : IEdgeSec {
         return "EdgeSec - Hello World!"
     }
 
-    override fun initialize(gatewayID: String, transportPlugin: ITransportPlugin, cryptoPlugins: ArrayList<ICryptographicPlugin>, authPlugins: ArrayList<IAuthenticationPlugin>) {
+    fun print(s: String) {
+        System.out.println("[DEBUG] " + s);
+    }
 
-        // Guarda valores em variáveis da classe
+    override fun initialize(
+        gatewayID: String,
+        transportPlugin: ITransportPlugin,
+        cryptoPlugins: ArrayList<ICryptographicPlugin>,
+        authPlugins: ArrayList<IAuthenticationPlugin>
+    ) {
+
+        // Store parameters in class variables
+        if (gatewayID.length != Constants.GATEWAY_ID_BYTES_SIZE) {
+            throw Exception("Invalid gateway ID: should be of size :" + Constants.GATEWAY_ID_BYTES_SIZE)
+        }
         this.gatewayID = gatewayID;
         this.transportPlugin = transportPlugin;
-        this.cryptoPlugins = cryptoPlugins;
-        this.authPlugins = authPlugins;
+        if (cryptoPlugins.size > 0)
+            this.cryptoPlugins = cryptoPlugins;
+        if (authPlugins.size > 0)
+            this.authPlugins = authPlugins;
 
-        // Inicializa as outras classes do framework, como os wrappers de plugins
+        // Initialize classes and wrappers
         this.authorization = Authorization();
 
-        // Inicializa listas e variáveis
+        // Initialize internal variables
         this.secureConnections = ArrayList<SecureConnection>();
     }
 
     override fun searchDevices(): ArrayList<String> {
 
-        if (this.transportPlugin == null) {
-            return ArrayList<String>();
-        }
+        // Check if transport plugin is set
+        this.transportPlugin ?: throw Exception("Transport Plugin not initialized");
 
-        // chama classe TransportPlugin para iniciar scan
+        // Call transport plugin to scan for devices
         val foundDevices = this.transportPlugin!!.scanForDevices();
         var compatibleDevices: ArrayList<String> = ArrayList<String>();
+        print("Devices scanned")
 
-        // usa lista de dispositivos encontrados e chama classe TransportPlugin para verificar a compatibilidade deles com o EdgeSec (?? isso poderia ser feito diretamente no plugin, já abstraido para o framework ??)
+        // Use transport plugin to check which devices are compatible with EdgeSec
         for (device in foundDevices) {
             if (this.transportPlugin!!.verifyDeviceCompatibility(device)) {
                 compatibleDevices.add(device);
             }
         }
+        print("Compatible devices selected")
 
-        // retorna ids dos dispositivos encontrados
+        // Update compatible devices array
+        this.compatibleDevices = ArrayList<String>(compatibleDevices);
+
+        // return ID of compatible devices
         return compatibleDevices;
     }
 
     override fun secureConnect(deviceID: String): Boolean {
 
-        // Chama função connectAndHandshake para se conectar e realizar o Handshake dos protocolos de criptografia e autenticação
+        // Verify if plugins are correctly set
+        this.transportPlugin ?: throw Exception("Transport plugin not initialized")
+//        this.authPlugins?: throw Exception("Authentication plugins not initialized")
+        this.cryptoPlugins ?: throw Exception("Cryptographic plugins not initialized")
 
-        // Configura as classes AuthenticationPlugin e CryptographyPlugin com os protocolos decididos no handshake
+        // Try to connect and perform EdgeSec handshake to negotiate authentication and cryptographic protocols
+        val objectID = this.connectAndHandshake(deviceID);
 
-        // Chama função exchangeAuthenticationIDs para usar o TransportPlugin e realizar as primeiras etapas do processo de autenticação (troca de IDs)
+        // TODO: Configura as classes AuthenticationPlugin e CryptographyPlugin com os protocolos decididos no handshake
+
+        // SKIPPING: Chama função exchangeAuthenticationIDs para usar o TransportPlugin e realizar as primeiras etapas do processo de autenticação (troca de IDs)
 
         // Chama classe de Authorization para verificar se dispositivo pode se comunicar com o gateway
 
@@ -105,26 +137,47 @@ class EdgeSec() : IEdgeSec {
         return false;
     }
 
-    private fun connectAndHandshake() {
-        // Faz conexão inicial utilizando a classe TransportPlugin
+    private fun connectAndHandshake(deviceID: String): String {
 
-        // Chama classe de TransportPlugin para verificar se dispositivo é compatível com EdgeSec
+        print("Starting handshake")
 
-        // Chama classe de TransportPlugin para enviar mensagem para o dispositivo com:
-        // - versao do EdgeSec
-        // - ID do gateway
+        // Use transport plugin to verify if device is compatible with EdgeSec
+        if (!this.transportPlugin!!.verifyDeviceCompatibility(deviceID))
+            throw Exception("Device is not compatible with EdgeSec");
 
+
+        // Build HandshakeHello message with EdgeSecVersion + gateway ID
+        val version = this.EdgeSecVersion.encodeToByteArray()
+        val gatewayID = this.gatewayID.encodeToByteArray();
+        val handshakeHelloMessage: ByteArray = version + gatewayID;
+
+        print("Sending handshake: " + handshakeHelloMessage.decodeToString());
+
+        //Send HandshakeHello message
+        this.transportPlugin!!.sendHandshakeHello(deviceID, handshakeHelloMessage);
+
+        print("Handshake sent");
         // Chama classe de TransportPlugin para ler mensagem do dispositivo com:
-        // - ID do dispositivo
-        // - Lista de protocolos de autenticacao disponiveis
-        // - Lista de protocolos de criptografia disponiveis
+        // - ID do objeto
 
-        // Percorre as listas selecionando os protocolos a serem utilizados, sempre buscando por protocolos preferenciais. Se nao achar nenhum protocolo compativel, desconecta
+        // Read HandshakeHello response
+        val handshakeResponse: ByteArray = this.transportPlugin!!.readHandshakeResponse(deviceID)
+            ?: throw Exception("Error reading handshake response");
 
-        // Chama classe de TransportPlugin para enviar mensagem para o dispositivo com:
-        // - Protocolo de autenticacao selecionado
-        // - Protocolo de criptografia selecionado
+        var lastIndexRead = 0;
 
+        // Get Device Authentication ID
+        val objectID: String = handshakeResponse.slice(
+            IntRange(
+                lastIndexRead,
+                lastIndexRead + Constants.DEVICE_ID_BYTES_SIZE - 1
+            )
+        ).toByteArray().decodeToString()
+        lastIndexRead += Constants.DEVICE_ID_BYTES_SIZE;
+
+        print("deviceID: " + objectID)
+
+        return objectID;
     }
 
     private fun exchangeAuthenticationIDs() {
@@ -165,4 +218,53 @@ class EdgeSec() : IEdgeSec {
 
         // Chama classe de TransportPlugin para ler resposta da Hello Message
     }
+
+
+    /*
+    PROCESSO DE NEGOCIACAO DE PROTOCOLOS (na funcao de handshake)
+    // Chama classe de TransportPlugin para ler mensagem do dispositivo com:
+        // - ID do dispositivo
+        // - Tamanho em bytes da lista de protocolos auth
+        // - Lista de protocolos de autenticacao disponiveis (codigos)
+        // - Tamanho em bytes da lista de protocolos crypto
+        // - Lista de protocolos de criptografia disponiveis (codigos)
+
+    // Get Auth protocol list size
+        val sizeOfAuthList: Int = handshakeResponse.slice(IntRange(lastIndexRead, lastIndexRead + Constants.PROTOCOL_LIST_LENGTH_BYTES_SIZE)).toByteArray().decodeToInt();
+        lastIndexRead += Constants.PROTOCOL_LIST_LENGTH_BYTES_SIZE;
+
+        print("size of auth list: " + sizeOfAuthList)
+        var authProtocolsList = ArrayList<Int>();
+        for(i in 0 until sizeOfAuthList / Constants.PROTOCOL_ID_BYTES_SIZE) {
+            var startIndex = lastIndexRead + (i*Constants.PROTOCOL_ID_BYTES_SIZE)
+            print("startIndex: " + startIndex)
+            print("sliced int: " + handshakeResponse.slice(IntRange(startIndex, startIndex + Constants.PROTOCOL_ID_BYTES_SIZE)).toByteArray())
+            authProtocolsList.add(handshakeResponse.slice(IntRange(startIndex, startIndex + Constants.PROTOCOL_ID_BYTES_SIZE)).toByteArray().decodeToInt());
+            print("protocol list: " + authProtocolsList)
+        }
+        lastIndexRead += Constants.PROTOCOL_ID_BYTES_SIZE * sizeOfAuthList;
+
+
+        // Get Crypto Protocol list
+        val sizeOfCryptoList: Int = handshakeResponse.slice(IntRange(lastIndexRead, lastIndexRead + Constants.PROTOCOL_LIST_LENGTH_BYTES_SIZE)).toByteArray().decodeToInt();
+        lastIndexRead += Constants.PROTOCOL_LIST_LENGTH_BYTES_SIZE;
+
+        var cryptoProtocolsList = ArrayList<Int>();
+        for(i in 0 until sizeOfCryptoList / Constants.PROTOCOL_ID_BYTES_SIZE) {
+            var startIndex = lastIndexRead + (i*Constants.PROTOCOL_ID_BYTES_SIZE)
+            cryptoProtocolsList.add(handshakeResponse.slice(IntRange(startIndex, Constants.PROTOCOL_ID_BYTES_SIZE)).toByteArray().decodeToInt());
+        }
+
+        print("Device Auth ID: " + deviceAuthenticationID)
+        print("Size of auth list: " + sizeOfAuthList)
+        print("Auth List: " + authProtocolsList)
+        print("Size of crypto list: " + sizeOfCryptoList)
+        print("Crypto List: " + cryptoProtocolsList)
+
+        // Percorre as listas selecionando os protocolos a serem utilizados, sempre buscando por protocolos preferenciais. Se nao achar nenhum protocolo compativel, desconecta
+
+        // Chama classe de TransportPlugin para enviar mensagem para o dispositivo com:
+        // - Protocolo de autenticacao selecionado
+        // - Protocolo de criptografia selecionado
+     */
 }

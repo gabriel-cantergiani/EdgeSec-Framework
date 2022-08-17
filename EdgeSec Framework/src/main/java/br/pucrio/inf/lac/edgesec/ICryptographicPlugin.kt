@@ -27,7 +27,7 @@ interface ICryptographicPlugin {
         Retorno:
             - array de bytes da chave criptográfica
      */
-    fun generateSecretKeySpec(seed: String): ByteArray;
+    fun generateSecretKey(seed: ByteArray): ByteArray;
 
 
     /*
