@@ -1,12 +1,14 @@
 package br.pucrio.inf.lac.rc4cryptography
 
-import br.pucrio.inf.lac.edgesec.ICryptographicPlugin
+import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
 import java.security.SecureRandom
+import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 
 class RC4(): ICryptographicPlugin {
 
     private val TAG = "RC4"
+    private val CryptoAlgorithmID = "RC4"
 
     init {
     }
@@ -31,7 +33,12 @@ class RC4(): ICryptographicPlugin {
     }
 
     override fun encrypt(plainText: ByteArray, key: ByteArray): ByteArray {
-        return ByteArray(20);
+        val rc4Key = SecretKeySpec(key, CryptoAlgorithmID)
+        val rc4 = Cipher.getInstance(CryptoAlgorithmID)
+
+        rc4.init(Cipher.ENCRYPT_MODE, rc4Key)
+
+        return rc4.update(plainText);
     }
 
     override fun decrypt(cipher: ByteArray, key: ByteArray): ByteArray {

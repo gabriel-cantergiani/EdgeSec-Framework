@@ -1,68 +1,78 @@
 package br.pucrio.inf.lac.contextnetcore
 
-import br.pucrio.inf.lac.edgesec.Constants
-import br.pucrio.inf.lac.edgesec.IAuthenticationPlugin
-import br.pucrio.inf.lac.edgesec.ICryptographicPlugin
+import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
+import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
 import br.pucrio.inf.lac.hmacmd5authentication.HmacMD5
 import br.pucrio.inf.lac.rc4cryptography.RC4
+import com.google.gson.Gson
 
 object ContextNetCore {
     // Mocks the functionalities of the ContextNetCore servers
 
-    val coreAuthKey = "Kauth_core".encodeToByteArray();
+    private val coreAuthKey = "Kauth_core".encodeToByteArray();
 
-    val registeredObjects = arrayOf<String>("0879C623C9C8", "607DE22FC767");
-    val objectsAuthKeys = mapOf<String, ByteArray>(
+    private val registeredObjects = arrayOf<String>("0879C623C9C8", "607DE22FC767");
+    private val objectsAuthKeys = mapOf<String, ByteArray>(
         "0879C623C9C8" to "Kauth_Obj1".encodeToByteArray(),
         "607DE22FC767" to "Kauth_Obj2".encodeToByteArray(),
     )
-    val objectsCipherKeys = mapOf<String, ByteArray>(
+    private val objectsCipherKeys = mapOf<String, ByteArray>(
         "0879C623C9C8" to "Kcipher_Obj1".encodeToByteArray(),
         "607DE22FC767" to "Kcipher_Obj2".encodeToByteArray(),
     )
 
-    val objectsSupportedProtocolSuites = mapOf<String, Array<String>>(
+    private val objectsSupportedProtocolSuites = mapOf<String, Array<String>>(
         "0879C623C9C8" to arrayOf<String>("RC4_HMAC_MD5", "AES128_HMAC_MD5"),
         "607DE22FC767" to arrayOf<String>("RC4_HMAC_MD5"),
     )
-    val objectsAuthorizedGateways = mapOf<String, Array<String>>(
+    private val objectsAuthorizedGateways = mapOf<String, Array<String>>(
         "0879C623C9C8" to arrayOf<String>("736DF76FC9KU", "LK9JD765JKO9"),
         "607DE22FC767" to arrayOf<String>("808DE88FC8TE", "736DF76FC9KU"),
     )
 
-    var cryptoPlugins = mapOf<String, ICryptographicPlugin>(
+    private var cryptoPlugins = mapOf<String, ICryptographicPlugin>(
         "AES128" to RC4(), // TODO: REPLACE WITH AES128 IMPLEMENTATION
         "RC4" to RC4(),
     )
 
-    var authPlugins = mapOf<String, IAuthenticationPlugin>(
+    private var authPlugins = mapOf<String, IAuthenticationPlugin>(
         "HMAC_SHA1" to HmacMD5(), // TODO: REPLACE WITH AES128 IMPLEMENTATION
         "HMAC_MD5" to HmacMD5(),
     )
 
-    fun authorize(gatewayID: String, objectID: String): ByteArray {
-        // Validate if devices are authorized
-        if (!objectsAuthorizedGateways.containsKey(objectID))
-            throw Exception("Object is not registered in ContextNetCore")
+    fun authorize(gatewayID: String, objectID: String): Pair<Boolean, String> {
+
+        // Validate if object is registered
+        if (!registeredObjects.contains(objectID))
+            return Pair(false,"Object is not registered in ContextNetCore")
 
         if (!objectsAuthorizedGateways[objectID]!!.contains(gatewayID))
-            throw Exception("Gateway is not authorized to communicate with this object")
+            return Pair(false, "Gateway is not authorized to communicate with this object")
 
         // Select protocol suite
         val selectedProtocolSuite = selectProtocolSuite(objectID)
-            ?: throw Exception("Object does not support any of the required protocol suites")
+            ?: return Pair(false, "Object does not support any of the required protocol suites")
 
-        val cryptoPlugin = getCryptoPlugin(selectedProtocolSuite) ?: throw Exception("Failed to get crypto plugin")
-        val authPlugin = getAuthPlugin(selectedProtocolSuite) ?: throw Exception("Failed to get auth plugin")
+        val cryptoPlugin =
+            getCryptoPlugin(selectedProtocolSuite) ?: return Pair(false, "Failed to get crypto plugin")
+        val authPlugin =
+            getAuthPlugin(selectedProtocolSuite) ?: return Pair(false, "Failed to get auth plugin")
+
+        // Generate authentication values
+        val otpChallenge = cryptoPlugin.generateSecureRandomToken(Constants.OTP_BYTES_SIZE)
+        val sessionKey = generateSessionKey(Constants.SESSION_KEY_BYTES_SIZE, cryptoPlugin)
+        val otp = generateOTP(objectID, gatewayID, otpChallenge, authPlugin)
 
         // Create authentication package
-        val authenticationPackage = generateAuthPackage(objectID, gatewayID, cryptoPlugin, authPlugin)
+        val authenticationPackage =
+            generateAuthPackage(objectsCipherKeys[objectID]!!, otp, sessionKey, cryptoPlugin, authPlugin)
 
         // Build response (with protocol suites)
-        val response = authenticationPackage + Constants.PROTOCOLS_SUITE_ID[selectedProtocolSuite]!!
+        val response = AuthorizationResponse(otp, sessionKey, authenticationPackage, selectedProtocolSuite)
 
+        val gson = Gson()
         // Send response as byte array (mocking network response)
-        return response
+        return Pair(true, gson.toJson(response))
     }
 
     private fun selectProtocolSuite(objectID: String): String? {
@@ -86,23 +96,21 @@ object ContextNetCore {
     }
 
     private fun getAuthPlugin(protocolSuite: String): IAuthenticationPlugin? {
-        val authProtocol = protocolSuite.split("_")[1] + protocolSuite.split("_")[2]
+        val authProtocol = protocolSuite.split("_")[1] + "_" + protocolSuite.split("_")[2]
+
         return authPlugins[authProtocol]
     }
 
     private fun generateAuthPackage(
-        objectID: String,
-        gatewayID: String,
+        cipherKey: ByteArray,
+        otp: ByteArray,
+        sessionKey: ByteArray,
         cryptoPlugin: ICryptographicPlugin,
         authPlugin: IAuthenticationPlugin
     ): ByteArray {
 
-        val otpChallenge = cryptoPlugin.generateSecureRandomToken(Constants.OTP_BYTES_SIZE)
-        val sessionKey = generateSessionKey(Constants.SESSION_KEY_BYTES_SIZE, cryptoPlugin)
-        val otp = generateOTP(objectID, gatewayID, otpChallenge, authPlugin)
-
         val authPackage = otp + sessionKey
-        val encryptedAuthPackage = cryptoPlugin.encrypt(authPackage, objectsCipherKeys[objectID]!!)
+        val encryptedAuthPackage = cryptoPlugin.encrypt(authPackage, cipherKey)
         val authPackageSignature = authPlugin.sign(encryptedAuthPackage, coreAuthKey)
 
         return encryptedAuthPackage + authPackageSignature
@@ -114,10 +122,15 @@ object ContextNetCore {
         return sessionKey;
     }
 
-    private fun generateOTP(objectID: String, gatewayID: String, otpChallenge: ByteArray, authPlugin: IAuthenticationPlugin): ByteArray {
-        val concatenation = objectID.encodeToByteArray() + gatewayID.encodeToByteArray() + otpChallenge + objectsAuthKeys[objectID]!!
-        val otp = authPlugin.generateHash(concatenation)
-        return otp
+    private fun generateOTP(
+        objectID: String,
+        gatewayID: String,
+        otpChallenge: ByteArray,
+        authPlugin: IAuthenticationPlugin
+    ): ByteArray {
+        val concatenation =
+            objectID.encodeToByteArray() + gatewayID.encodeToByteArray() + otpChallenge + objectsAuthKeys[objectID]!!
+        return authPlugin.generateHash(concatenation)
     }
 
 

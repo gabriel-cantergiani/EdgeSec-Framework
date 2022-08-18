@@ -1,4 +1,4 @@
-package br.pucrio.inf.lac.edgesec
+package br.pucrio.inf.lac.edgesecinterfaces
 
 interface ITransportPlugin {
 

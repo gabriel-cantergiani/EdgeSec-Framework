@@ -1,4 +1,4 @@
-package br.pucrio.inf.lac.edgesec
+package br.pucrio.inf.lac.edgesecinterfaces
 
 interface IAuthenticationPlugin {
 
@@ -42,4 +42,12 @@ interface IAuthenticationPlugin {
             - array de bytes com o resultado da função de hash
      */
     fun generateHash(payload: ByteArray): ByteArray;
+
+    /*
+        Retorna o tamanho em bytes do valor gerado pelo algoritmo de hashing do plugin
+
+        Retorno:
+            - inteiro que representa o tamanho em bytes do valor gerado pelo hash
+     */
+    fun getHashSize(): Int;
 }

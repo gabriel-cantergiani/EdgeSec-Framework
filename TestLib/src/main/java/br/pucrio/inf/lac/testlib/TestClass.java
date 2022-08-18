@@ -2,9 +2,9 @@ package br.pucrio.inf.lac.testlib;
 
 import br.pucrio.inf.lac.bletransport.BLE;
 import br.pucrio.inf.lac.edgesec.EdgeSec;
-import br.pucrio.inf.lac.edgesec.IAuthenticationPlugin;
-import br.pucrio.inf.lac.edgesec.ICryptographicPlugin;
-import br.pucrio.inf.lac.edgesec.ITransportPlugin;
+import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin;
+import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin;
+import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin;
 import br.pucrio.inf.lac.rc4cryptography.RC4;
 import java.util.ArrayList;
 

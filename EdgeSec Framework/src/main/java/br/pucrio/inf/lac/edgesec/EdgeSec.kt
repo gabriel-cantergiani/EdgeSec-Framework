@@ -1,9 +1,8 @@
 package br.pucrio.inf.lac.edgesec
 
-import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.decodeByteArrayToHexString
-import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.decodeToInt
-import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.encodeToByteArray
-import java.sql.DriverManager.println
+import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
+import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
+import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
 import java.util.*
 
 class EdgeSec() : IEdgeSec {
@@ -97,6 +96,12 @@ class EdgeSec() : IEdgeSec {
         // SKIPPING: Chama função exchangeAuthenticationIDs para usar o TransportPlugin e realizar as primeiras etapas do processo de autenticação (troca de IDs)
 
         // Chama classe de Authorization para verificar se dispositivo pode se comunicar com o gateway
+        val authenticationPackage = this.authorization?.verifyAuthorization(this.gatewayID, objectID) ?: throw Exception("Failed to get authorization from Core")
+
+        print("OTP: " + authenticationPackage.OTP.decodeToString())
+        print("SessionKey: " + authenticationPackage.SessionKey.decodeToString())
+        print("Signed Auth Package: " + authenticationPackage.signedAuthPackage.decodeToString())
+        print("Protocol suite: " + authenticationPackage.protocolSuite)
 
         // Chama função createHelloMessage para obter a Hello Message pronta
 

@@ -1,5 +1,9 @@
 package br.pucrio.inf.lac.edgesec
 
+import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
+import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
+import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
+
 interface IEdgeSec {
 
     /*

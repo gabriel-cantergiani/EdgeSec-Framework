@@ -1,6 +1,8 @@
 package br.pucrio.inf.lac.edgesec
 
-import javax.crypto.spec.SecretKeySpec
+import br.pucrio.inf.lac.contextnetcore.AuthorizationResponse
+import br.pucrio.inf.lac.contextnetcore.ContextNetCore
+import com.google.gson.Gson
 
 class Authorization {
 
@@ -8,22 +10,25 @@ class Authorization {
 
     private val TAG = "Authorization"
 
-    // MOCK (variaveis que sao usadas no processamento feito pelo SDDL)
-    private val Kauth_sddl: SecretKeySpec? = null;
-    private val Kauth_object: ByteArray = ByteArray(0);
-    private val Kcipher_object: ByteArray = ByteArray(0);
-
     init {
     }
 
-    fun verifyAuthorization(gatewayID: String, objectID: String): AuthenticationPackage {
+    fun verifyAuthorization(gatewayID: String, objectID: String): AuthenticationPackage? {
 
         // Call ContexNet class to authorize connection (mocked network request)
+        val (success, authorizationResponse) = ContextNetCore.authorize(gatewayID, objectID)
 
-        // Receive response as byte array
+        if (!success) {
+            System.out.println("Authorization error: " + authorizationResponse)
+            return null
+        }
 
-        // Break down byte array into OTP, Session Key, and Protocol suites values
+        // Parse response
+        val gson = Gson()
+        val authorization = gson.fromJson(authorizationResponse, AuthorizationResponse::class.java)
 
-        return AuthenticationPackage("RC4_HMAC_MD5", gatewayID, objectID, "OTP".encodeToByteArray(), "Key".encodeToByteArray());
+
+        // Return Auth Package with values needed to continue authentication process
+        return AuthenticationPackage(authorization.protocolSuite, authorization.authenticatioPackage, authorization.OTP, authorization.sessionKey);
     }
 }

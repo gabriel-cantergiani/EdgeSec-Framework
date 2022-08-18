@@ -1,9 +1,6 @@
 package br.pucrio.inf.lac.bletransport
 
-import br.pucrio.inf.lac.edgesec.Constants
-import br.pucrio.inf.lac.edgesec.ITransportPlugin
-import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.decodeToInt
-import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.encodeToByteArray
+import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
 
 class BLE() : ITransportPlugin {
 

@@ -1,10 +1,13 @@
 package br.pucrio.inf.lac.hmacmd5authentication
 
-import br.pucrio.inf.lac.edgesec.IAuthenticationPlugin
+import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
+import java.security.MessageDigest
 
 class HmacMD5(): IAuthenticationPlugin {
 
     private val TAG = "HmacMD5"
+    private val DigestAlgorithmID = "MD5"
+    private val DigestAlgorithmBytesSize = 16
 
     init {
     }
@@ -19,10 +22,17 @@ class HmacMD5(): IAuthenticationPlugin {
 
 
     override fun verifySignature(data: ByteArray, key: ByteArray, signature: ByteArray): Boolean {
+
         return false
     }
 
     override fun generateHash(payload: ByteArray): ByteArray {
-        return ByteArray(1)
+        val digestInstance = MessageDigest.getInstance(DigestAlgorithmID)
+        digestInstance.update(payload)
+        return digestInstance.digest()
+    }
+
+    override fun getHashSize(): Int {
+        return DigestAlgorithmBytesSize;
     }
 }
