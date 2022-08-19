@@ -34,10 +34,10 @@ class SecurityUtils {
 
         fun Int.encodeToByteArray(): ByteArray {
             var buffer: ByteArray = ByteArray(4);
-            buffer[0] = (this shr 0).toByte()
-            buffer[1] = (this shr 8).toByte()
-            buffer[2] = (this shr 16).toByte()
-            buffer[3] = (this shr 24).toByte()
+            buffer[0] = (this ushr 0).toByte()
+            buffer[1] = (this ushr 8).toByte()
+            buffer[2] = (this ushr 16).toByte()
+            buffer[3] = (this ushr 24).toByte()
 
             return buffer;
         }

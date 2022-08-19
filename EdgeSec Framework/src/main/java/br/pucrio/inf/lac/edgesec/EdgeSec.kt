@@ -1,5 +1,6 @@
 package br.pucrio.inf.lac.edgesec
 
+import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.encodeToByteArray
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
 import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
 import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
@@ -13,6 +14,8 @@ class EdgeSec() : IEdgeSec {
     private var transportPlugin: ITransportPlugin? = null;
     private var cryptoPlugins: ArrayList<ICryptographicPlugin>? = null;
     private var authPlugins: ArrayList<IAuthenticationPlugin>? = null;
+    private var selectedCryptoPlugin: ICryptographicPlugin? = null
+    private var selectedAuthPlugin: IAuthenticationPlugin? = null
 
     private var authenticationPackage: AuthenticationPackage? = null;
     private var authorization: Authorization? = null;
@@ -85,7 +88,7 @@ class EdgeSec() : IEdgeSec {
 
         // Verify if plugins are correctly set
         this.transportPlugin ?: throw Exception("Transport plugin not initialized")
-//        this.authPlugins?: throw Exception("Authentication plugins not initialized")
+        this.authPlugins?: throw Exception("Authentication plugins not initialized")
         this.cryptoPlugins ?: throw Exception("Cryptographic plugins not initialized")
 
         // Try to connect and perform EdgeSec handshake to negotiate authentication and cryptographic protocols
@@ -103,9 +106,22 @@ class EdgeSec() : IEdgeSec {
         print("Signed Auth Package: " + authenticationPackage.signedAuthPackage.decodeToString())
         print("Protocol suite: " + authenticationPackage.protocolSuite)
 
-        // Chama função createHelloMessage para obter a Hello Message pronta
+        // Set plugins
+        setPlugins(authenticationPackage.protocolSuite)
 
-        // Chama função exchangeHelloMessage para enviar e receber resposta da Hello Message
+        if (selectedAuthPlugin == null || selectedCryptoPlugin == null)
+            throw Exception("Plugins not compatible")
+
+        // Chama função createHelloMessage para obter a Hello Message pronta
+        val signedHelloMessage = createHelloMessage(authenticationPackage)
+
+        print("HelloMessage: " + signedHelloMessage)
+//        // Chama função exchangeHelloMessage para enviar e receber resposta da Hello Message
+//        val success = transportPlugin!!.sendHelloMessage(deviceID, signedHelloMessage)
+//        if (!success)
+//            throw Exception("Failed to send helloMessage")
+//
+//        val helloMessageResponse = transportPlugin!!.readHelloMessageResponse(deviceID)
 
         // Chama classe AuthenticationPlugin para verificar assinatura da resposta da Hello Message
 
@@ -193,35 +209,44 @@ class EdgeSec() : IEdgeSec {
         // chama classe de TransportPlugin para enviar ID ao dispositivo
     }
 
-    private fun createHelloMessage() {
-        // Chama função createAuthPackage para gerar pacote de autenticação
+    private fun createHelloMessage(authenticationPackage: AuthenticationPackage): ByteArray {
 
-        // Chama classe AuthenticationPlugin para assinar pacote de autenticação
-
-        // Gera timestamp
+        // Generate timestamp
+        val timestamp = (System.currentTimeMillis() / 1000).toInt().encodeToByteArray()
 
         // Chama função para gerar Hello Message utilizando pacote de autenticação e timestamp
+        val helloMessage = authenticationPackage.signedAuthPackage + timestamp
 
         // Chama classe AuthenticationPlugin para assinar Hello Message
+        val key = selectedCryptoPlugin!!.generateSecretKey(authenticationPackage.OTP)
 
-        // Chama função para gerar mensagem autenticada (Hello Message + Assinatura)
-    }
-
-    private fun createAuthPackage() {
-
-        // Chama classe CryptographyPlugin para gerar OTPChallenge
-
-        // Chama classe CryptographyPlugin para gerar chave de sessão
-
-        // Chama classe CryptographyPlugin para gerar OTP
-
-        // Cria classe AuthenticationPackage e chama função para montar o pacote de autenticação com os dados gerados
+        return selectedAuthPlugin!!.sign(helloMessage, key)
     }
 
     private fun exchangeHelloMessage() {
         // Chama classe de TransportPlugin para enviar a mensagem autenticada
 
         // Chama classe de TransportPlugin para ler resposta da Hello Message
+    }
+
+    private fun setPlugins(protocolSuite: String) {
+        val cryptoProtocol = protocolSuite.split("_")[0]
+        val authProtocol = protocolSuite.split("_")[1] + "_" + protocolSuite.split("_")[2]
+
+        selectedAuthPlugin = null
+        selectedCryptoPlugin = null
+
+        for(selectedPlugin in authPlugins!!) {
+            if (authProtocol == selectedPlugin.getProtocolID()) {
+                selectedAuthPlugin = selectedPlugin
+            }
+        }
+
+        for(selectedPlugin in cryptoPlugins!!) {
+            if (cryptoProtocol == selectedPlugin.getProtocolID()) {
+                selectedCryptoPlugin = selectedPlugin
+            }
+        }
     }
 
 
