@@ -1,5 +1,6 @@
 package br.pucrio.inf.lac.edgesec
 
+import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.decodeByteArrayToHexString
 import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.encodeToByteArray
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
 import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
@@ -17,7 +18,6 @@ class EdgeSec() : IEdgeSec {
     private var selectedCryptoPlugin: ICryptographicPlugin? = null
     private var selectedAuthPlugin: IAuthenticationPlugin? = null
 
-    private var authenticationPackage: AuthenticationPackage? = null;
     private var authorization: Authorization? = null;
     private var secureConnections: ArrayList<SecureConnection>? = null;
     private var compatibleDevices: ArrayList<String>? = null;
@@ -88,7 +88,7 @@ class EdgeSec() : IEdgeSec {
 
         // Verify if plugins are correctly set
         this.transportPlugin ?: throw Exception("Transport plugin not initialized")
-        this.authPlugins?: throw Exception("Authentication plugins not initialized")
+        this.authPlugins ?: throw Exception("Authentication plugins not initialized")
         this.cryptoPlugins ?: throw Exception("Cryptographic plugins not initialized")
 
         // Try to connect and perform EdgeSec handshake to negotiate authentication and cryptographic protocols
@@ -99,11 +99,21 @@ class EdgeSec() : IEdgeSec {
         // SKIPPING: Chama função exchangeAuthenticationIDs para usar o TransportPlugin e realizar as primeiras etapas do processo de autenticação (troca de IDs)
 
         // Chama classe de Authorization para verificar se dispositivo pode se comunicar com o gateway
-        val authenticationPackage = this.authorization?.verifyAuthorization(this.gatewayID, objectID) ?: throw Exception("Failed to get authorization from Core")
+        val authorizationResponse =
+            this.authorization?.verifyAuthorization(this.gatewayID, objectID)
+                ?: throw Exception("Failed to get authorization from Core")
 
-        print("OTP: " + authenticationPackage.OTP.decodeToString())
-        print("SessionKey: " + authenticationPackage.SessionKey.decodeToString())
-        print("Signed Auth Package: " + authenticationPackage.signedAuthPackage.decodeToString())
+        val authenticationPackage = buildAuthenticationPackage(
+            authorizationResponse.protocolSuite,
+            authorizationResponse.authenticatioPackage,
+            authorizationResponse.OTP,
+            authorizationResponse.sessionKey
+        )
+
+        print("OTP: " + authenticationPackage.OTP.decodeByteArrayToHexString())
+        print("SessionKey: " + authenticationPackage.SessionKey.decodeByteArrayToHexString())
+        print("Timestamp: " + authenticationPackage.messageTimestamp.decodeByteArrayToHexString())
+        print("Signed Auth Package: " + authenticationPackage.signedAuthPackage.decodeByteArrayToHexString())
         print("Protocol suite: " + authenticationPackage.protocolSuite)
 
         // Set plugins
@@ -114,20 +124,26 @@ class EdgeSec() : IEdgeSec {
 
         // Chama função createHelloMessage para obter a Hello Message pronta
         val signedHelloMessage = createHelloMessage(authenticationPackage)
+        print("HelloMessage: " + signedHelloMessage.decodeByteArrayToHexString())
 
-        print("HelloMessage: " + signedHelloMessage)
-//        // Chama função exchangeHelloMessage para enviar e receber resposta da Hello Message
-//        val success = transportPlugin!!.sendHelloMessage(deviceID, signedHelloMessage)
-//        if (!success)
-//            throw Exception("Failed to send helloMessage")
-//
-//        val helloMessageResponse = transportPlugin!!.readHelloMessageResponse(deviceID)
+        // Chama função exchangeHelloMessage para enviar e receber resposta da Hello Message
+        val helloMessageResponse = exchangeHelloMessage(deviceID, signedHelloMessage)
+            ?: throw Exception("Failed to get helloMessageResponse")
+        print("HelloMessageResponse: " + helloMessageResponse.decodeByteArrayToHexString())
 
         // Chama classe AuthenticationPlugin para verificar assinatura da resposta da Hello Message
+        val success =
+            verifyHelloMessageResponse(objectID, authenticationPackage, helloMessageResponse)
+        if (!success) {
+            throw Exception("Invalid HelloMessageResponse")
+        }
+        print("HelloMessageResponse validated successfully")
 
         // Cria classe SecureConnection para dispositivo e adiciona na lista de autenticados e conectados, e retorna
+        val newSecureConnection = SecureConnection(objectID, authenticationPackage.SessionKey)
+        secureConnections?.add(newSecureConnection) ?: throw Exception("Error creating secureConnection")
 
-        return false;
+        return true;
     }
 
     override fun secureRead(deviceID: String): ByteArray {
@@ -172,10 +188,12 @@ class EdgeSec() : IEdgeSec {
         val gatewayID = this.gatewayID.encodeToByteArray();
         val handshakeHelloMessage: ByteArray = version + gatewayID;
 
-        print("Sending handshake: " + handshakeHelloMessage.decodeToString());
+        print("Sending handshake: " + handshakeHelloMessage.decodeByteArrayToHexString());
 
         //Send HandshakeHello message
-        this.transportPlugin!!.sendHandshakeHello(deviceID, handshakeHelloMessage);
+        val success = this.transportPlugin!!.sendHandshakeHello(deviceID, handshakeHelloMessage);
+        if (!success)
+            throw Exception("Failed to send handshakeHello")
 
         print("Handshake sent");
         // Chama classe de TransportPlugin para ler mensagem do dispositivo com:
@@ -196,26 +214,16 @@ class EdgeSec() : IEdgeSec {
         ).toByteArray().decodeToString()
         lastIndexRead += Constants.DEVICE_ID_BYTES_SIZE;
 
-        print("deviceID: " + objectID)
+        print("objectID: " + objectID)
 
         return objectID;
     }
 
-    private fun exchangeAuthenticationIDs() {
-        // Chama classe TransportPlugin e se conecta com dispositivo
-
-        // chama classe de TransportPlugin para ler ID do dispositivo
-
-        // chama classe de TransportPlugin para enviar ID ao dispositivo
-    }
-
     private fun createHelloMessage(authenticationPackage: AuthenticationPackage): ByteArray {
 
-        // Generate timestamp
-        val timestamp = (System.currentTimeMillis() / 1000).toInt().encodeToByteArray()
-
         // Chama função para gerar Hello Message utilizando pacote de autenticação e timestamp
-        val helloMessage = authenticationPackage.signedAuthPackage + timestamp
+        val helloMessage =
+            authenticationPackage.signedAuthPackage + authenticationPackage.messageTimestamp
 
         // Chama classe AuthenticationPlugin para assinar Hello Message
         val key = selectedCryptoPlugin!!.generateSecretKey(authenticationPackage.OTP)
@@ -223,10 +231,47 @@ class EdgeSec() : IEdgeSec {
         return selectedAuthPlugin!!.sign(helloMessage, key)
     }
 
-    private fun exchangeHelloMessage() {
+    private fun exchangeHelloMessage(deviceID: String, helloMessage: ByteArray): ByteArray? {
         // Chama classe de TransportPlugin para enviar a mensagem autenticada
+        val success = transportPlugin!!.sendHelloMessage(deviceID, helloMessage)
+        if (!success)
+            throw Exception("Failed to send helloMessage")
 
         // Chama classe de TransportPlugin para ler resposta da Hello Message
+        return transportPlugin!!.readHelloMessageResponse(deviceID)
+
+    }
+
+    private fun verifyHelloMessageResponse(
+        objectID: String,
+        authenticationPackage: AuthenticationPackage,
+        responseToBeVerified: ByteArray
+    ): Boolean {
+        var responseContent = ByteArray(0)
+
+        responseContent += gatewayID.encodeToByteArray()
+        responseContent += objectID.encodeToByteArray()
+        responseContent += authenticationPackage.messageTimestamp
+
+        val key = selectedCryptoPlugin!!.generateSecretKey(authenticationPackage.OTP)
+
+        return selectedAuthPlugin!!.verifySignature(responseContent, key, responseToBeVerified)
+    }
+
+    private fun buildAuthenticationPackage(
+        protocolSuite: String,
+        signedAuthPackage: ByteArray,
+        OTP: ByteArray,
+        sessionKey: ByteArray
+    ): AuthenticationPackage {
+        // Generate timestamp
+//        val timestamp = (System.currentTimeMillis() / 1000).toInt().encodeToByteArray()
+        // TODO": MOCKED TIMESTAMP GENERATION FOR TESTING
+        val timestamp = (91823 / 1000).toInt().encodeToByteArray()
+        // MOCKED
+
+        return AuthenticationPackage(protocolSuite, signedAuthPackage, OTP, sessionKey, timestamp)
+
     }
 
     private fun setPlugins(protocolSuite: String) {
@@ -236,19 +281,18 @@ class EdgeSec() : IEdgeSec {
         selectedAuthPlugin = null
         selectedCryptoPlugin = null
 
-        for(selectedPlugin in authPlugins!!) {
+        for (selectedPlugin in authPlugins!!) {
             if (authProtocol == selectedPlugin.getProtocolID()) {
                 selectedAuthPlugin = selectedPlugin
             }
         }
 
-        for(selectedPlugin in cryptoPlugins!!) {
+        for (selectedPlugin in cryptoPlugins!!) {
             if (cryptoProtocol == selectedPlugin.getProtocolID()) {
                 selectedCryptoPlugin = selectedPlugin
             }
         }
     }
-
 
     /*
     PROCESSO DE NEGOCIACAO DE PROTOCOLOS (na funcao de handshake)

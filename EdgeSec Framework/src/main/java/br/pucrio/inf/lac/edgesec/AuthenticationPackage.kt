@@ -6,7 +6,8 @@ class AuthenticationPackage(
     val protocolSuite: String,
     val signedAuthPackage: ByteArray,
     val OTP: ByteArray,
-    val SessionKey: ByteArray
+    val SessionKey: ByteArray,
+    val messageTimestamp: ByteArray
 ) {
 
     // Classe que representa o objeto de um pacote de autenticação

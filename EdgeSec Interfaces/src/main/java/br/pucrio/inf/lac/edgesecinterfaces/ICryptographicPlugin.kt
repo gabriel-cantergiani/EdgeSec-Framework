@@ -1,5 +1,7 @@
 package br.pucrio.inf.lac.edgesecinterfaces
 
+import java.security.Key
+
 interface ICryptographicPlugin {
 
     /*
@@ -27,7 +29,7 @@ interface ICryptographicPlugin {
         Retorno:
             - array de bytes da chave criptográfica
      */
-    fun generateSecretKey(seed: ByteArray): ByteArray;
+    fun generateSecretKey(seed: ByteArray): Key;
 
 
     /*

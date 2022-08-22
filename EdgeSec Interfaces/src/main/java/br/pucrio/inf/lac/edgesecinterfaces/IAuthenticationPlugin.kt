@@ -1,5 +1,7 @@
 package br.pucrio.inf.lac.edgesecinterfaces
 
+import java.security.Key
+
 interface IAuthenticationPlugin {
 
     /*
@@ -17,7 +19,7 @@ interface IAuthenticationPlugin {
         Retorno:
             - array de bytes contendo conjunto de dados e sua assinatura
      */
-    fun sign(data: ByteArray, key: ByteArray): ByteArray;
+    fun sign(data: ByteArray, key: Key): ByteArray;
 
     /*
         Verifica a assinatura de um conjunto de dados utilizando protocolo de autenticação
@@ -30,7 +32,7 @@ interface IAuthenticationPlugin {
         Retorno:
             - true se a assinatura for válida, false caso contrário
      */
-    fun verifySignature(data: ByteArray, key: ByteArray, signature: ByteArray): Boolean;
+    fun verifySignature(data: ByteArray, key: Key, signature: ByteArray): Boolean;
 
     /*
         Gera hash de um valor utilizando o algoritmo de hashing do plugin

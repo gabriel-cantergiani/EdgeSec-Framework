@@ -13,7 +13,7 @@ class Authorization {
     init {
     }
 
-    fun verifyAuthorization(gatewayID: String, objectID: String): AuthenticationPackage? {
+    fun verifyAuthorization(gatewayID: String, objectID: String): AuthorizationResponse? {
 
         // Call ContexNet class to authorize connection (mocked network request)
         val (success, authorizationResponse) = ContextNetCore.authorize(gatewayID, objectID)
@@ -25,10 +25,7 @@ class Authorization {
 
         // Parse response
         val gson = Gson()
-        val authorization = gson.fromJson(authorizationResponse, AuthorizationResponse::class.java)
 
-
-        // Return Auth Package with values needed to continue authentication process
-        return AuthenticationPackage(authorization.protocolSuite, authorization.authenticatioPackage, authorization.OTP, authorization.sessionKey);
+        return gson.fromJson(authorizationResponse, AuthorizationResponse::class.java);
     }
 }

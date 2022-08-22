@@ -1,6 +1,9 @@
 package br.pucrio.inf.lac.edgesec
 
-class SecureConnection {
+class SecureConnection(
+    val objectID: String,
+    val sessionKey: ByteArray
+) {
 
     // Classe que representa uma conexão segura existente entre o gateway e um dispositivo.
 

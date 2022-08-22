@@ -1,6 +1,7 @@
 package br.pucrio.inf.lac.rc4cryptography
 
 import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
+import java.security.Key
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
@@ -28,8 +29,8 @@ class RC4(): ICryptographicPlugin {
         return token.toString().toByteArray();
     }
 
-    override fun generateSecretKey(seed: ByteArray): ByteArray {
-        return SecretKeySpec(seed, getProtocolID()).toString().encodeToByteArray()
+    override fun generateSecretKey(seed: ByteArray): Key {
+        return SecretKeySpec(seed, getProtocolID())
     }
 
     override fun encrypt(plainText: ByteArray, key: ByteArray): ByteArray {

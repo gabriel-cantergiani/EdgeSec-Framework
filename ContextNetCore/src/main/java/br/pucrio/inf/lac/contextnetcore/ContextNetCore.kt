@@ -111,7 +111,8 @@ object ContextNetCore {
 
         val authPackage = otp + sessionKey
         val encryptedAuthPackage = cryptoPlugin.encrypt(authPackage, cipherKey)
-        val authPackageSignature = authPlugin.sign(encryptedAuthPackage, coreAuthKey)
+        val signingKey = cryptoPlugin.generateSecretKey(coreAuthKey)
+        val authPackageSignature = authPlugin.sign(encryptedAuthPackage, signingKey)
 
         return encryptedAuthPackage + authPackageSignature
     }
@@ -119,7 +120,7 @@ object ContextNetCore {
     private fun generateSessionKey(size: Int, cryptoPlugin: ICryptographicPlugin): ByteArray {
         val seed = cryptoPlugin.generateSecureRandomToken(size)
         val sessionKey = cryptoPlugin.generateSecretKey(seed);
-        return sessionKey;
+        return sessionKey.encoded;
     }
 
     private fun generateOTP(
@@ -130,7 +131,10 @@ object ContextNetCore {
     ): ByteArray {
         val concatenation =
             objectID.encodeToByteArray() + gatewayID.encodeToByteArray() + otpChallenge + objectsAuthKeys[objectID]!!
-        return authPlugin.generateHash(concatenation)
+        // TODO: MOCKED GENERATE OTP FOR TESTING
+        return "MOCKEDOTP".encodeToByteArray()
+//        return authPlugin.generateHash(concatenation)
+        // MOCKED
     }
 
 

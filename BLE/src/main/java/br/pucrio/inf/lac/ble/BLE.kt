@@ -1,12 +1,18 @@
-package br.pucrio.inf.lac.bletransport
+package br.pucrio.inf.lac.ble
 
 import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+import com.polidea.rxandroidble2.RxBleClient
 
-class BLE() : ITransportPlugin {
+class BLE(
+    private val bleClient: RxBleClient
+) : ITransportPlugin {
 
     private val TAG = "BLE"
 
     init {
+
     }
 
     /*
@@ -130,7 +136,9 @@ class BLE() : ITransportPlugin {
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
     override fun sendHandshakeFinished(deviceID: String, data: ByteArray): Boolean {
-        return false
+        // TODO: MOCKED
+        return deviceID == "60-7D-E2-2F-C7-67"
+        // MOCKED
     }
 
     /*
@@ -144,11 +152,25 @@ class BLE() : ITransportPlugin {
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
     override fun sendHelloMessage(deviceID: String, data: ByteArray): Boolean {
-        return false
+        // TODO: MOCKED
+        return deviceID == "60-7D-E2-2F-C7-67"
+        // MOCKED
     }
 
+    // TODO: MOCKED
+    fun Int.encodeToByteArray(): ByteArray {
+        var buffer: ByteArray = ByteArray(4);
+        buffer[0] = (this ushr 0).toByte()
+        buffer[1] = (this ushr 8).toByte()
+        buffer[2] = (this ushr 16).toByte()
+        buffer[3] = (this ushr 24).toByte()
+
+        return buffer;
+    }
+    // MOCKED
+
     /*
-        Faz a leitura da resposta dda hello message. Depedendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
+        Faz a leitura da resposta da hello message. Dependendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
 
         Parametros:
             - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
@@ -159,9 +181,22 @@ class BLE() : ITransportPlugin {
             - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
      */
     override fun readHelloMessageResponse(deviceID: String): ByteArray? {
-        if (deviceID == "")
-            return null
-        return ByteArray(1)
+        // TODO: MOCKED
+        if (deviceID == "60-7D-E2-2F-C7-67") {
+            var helloMessageResponse = ByteArray(0)
+
+            helloMessageResponse += "808DE88FC8TE".encodeToByteArray() // gatewayID
+            helloMessageResponse += "607DE22FC767".encodeToByteArray() // objectID
+            helloMessageResponse += (91823 / 1000).toInt().encodeToByteArray() // objectID
+
+            val key = SecretKeySpec("MOCKEDOTP".encodeToByteArray(), "RC4")
+            val macInstance = Mac.getInstance("hmacMD5")
+            macInstance.init(key)
+            return macInstance.doFinal(helloMessageResponse)
+        }
+
+        return null
+        // MOCKED
     }
 
     /*
