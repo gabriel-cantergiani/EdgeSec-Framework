@@ -1,9 +1,14 @@
 package br.pucrio.inf.lac.ble
 
 import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
+import com.polidea.rxandroidble2.RxBleClient
+import com.polidea.rxandroidble2.scan.ScanSettings
+import io.reactivex.Observable
+import io.reactivex.Single
+import io.reactivex.disposables.Disposable
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import com.polidea.rxandroidble2.RxBleClient
+
 
 class BLE(
     private val bleClient: RxBleClient
@@ -12,7 +17,6 @@ class BLE(
     private val TAG = "BLE"
 
     init {
-
     }
 
     /*
@@ -23,10 +27,24 @@ class BLE(
         Retorno:
             - lista de IDs de dispositivos encontrados
      */
-    override fun scanForDevices(): Array<String> {
-        // TODO: MOCKED
-        return arrayOf<String>("08-79-C6-23-C9-C8", "60-7D-E2-2F-C7-67")
-        // MOCKED
+    override fun scanForCompatibleDevices(): Observable<Array<String>> {
+        return Observable.create<Array<String>> {
+            emitter -> val scanSubscription: Disposable = bleClient.scanBleDevices(
+            ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setCallbackType(ScanSettings.CALLBACK_TYPE_FIRST_MATCH)
+                .build()
+        ).subscribe({
+            System.out.println("[debug] Scan result: " + it)
+            // TODO: MOCKED
+            emitter.onNext(arrayOf<String>("60-7D-E2-2F-C7-67"))
+            // MOCKED
+        },
+            {
+            emitter.onError(it)
+            })
+        }
+
     }
 
     /*
@@ -38,10 +56,9 @@ class BLE(
        Retorno:
            - true em caso de conectado com sucesso, false caso contrário
     */
-    override fun connect(deviceID: String): Boolean {
-
+    override fun connect(deviceID: String): Single<Boolean> {
         // TODO: MOCKED
-        return deviceID == "60-7D-E2-2F-C7-67"
+        return Single.create<Boolean>{emitter -> emitter.onSuccess(deviceID == "60-7D-E2-2F-C7-67") }
         // MOCKED
     }
 
@@ -54,9 +71,9 @@ class BLE(
         Retorno:
             - true em caso de compatível, false em caso de não compatível
      */
-    override fun verifyDeviceCompatibility(deviceID: String): Boolean {
+    override fun verifyDeviceCompatibility(deviceID: String): Single<Boolean> {
         // TODO: MOCKED
-        return deviceID == "60-7D-E2-2F-C7-67"
+        return Single.create<Boolean>{emitter -> emitter.onSuccess(deviceID == "60-7D-E2-2F-C7-67") }
         // MOCKED
     }
 
@@ -70,9 +87,9 @@ class BLE(
         Retorno:
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
-    override fun sendHandshakeHello(deviceID: String, data: ByteArray): Boolean {
+    override fun sendHandshakeHello(deviceID: String, data: ByteArray): Single<Boolean> {
         // TODO: MOCKED
-        return deviceID == "60-7D-E2-2F-C7-67"
+        return Single.create<Boolean>{emitter -> emitter.onSuccess(deviceID == "60-7D-E2-2F-C7-67") }
         // MOCKED
     }
 
@@ -87,7 +104,7 @@ class BLE(
         Retorno:
             - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
      */
-    override fun readHandshakeResponse(deviceID: String): ByteArray? {
+    override fun readHandshakeResponse(deviceID: String): Single<ByteArray?> {
         // TODO: MOCKED
         if (deviceID == "60-7D-E2-2F-C7-67") {
             val deviceAuthIDBytes = "607DE22FC767".encodeToByteArray()
@@ -117,11 +134,13 @@ class BLE(
 //            response += sizeOfCryptoListInBytes.encodeToByteArray()
 //            response += cryptoListInBytes
 
-            return response
+            // TODO: MOCKED
+            return Single.create<ByteArray?>{emitter -> emitter.onSuccess(response) }
+            // MOCKED
 
         }
 
-        return null
+        return Single.create<ByteArray?>{emitter -> emitter.onSuccess(ByteArray(0)) }
         // MOCKED
     }
 
@@ -135,9 +154,9 @@ class BLE(
         Retorno:
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
-    override fun sendHandshakeFinished(deviceID: String, data: ByteArray): Boolean {
+    override fun sendHandshakeFinished(deviceID: String, data: ByteArray): Single<Boolean> {
         // TODO: MOCKED
-        return deviceID == "60-7D-E2-2F-C7-67"
+        return Single.create<Boolean>{emitter -> emitter.onSuccess(deviceID == "60-7D-E2-2F-C7-67") }
         // MOCKED
     }
 
@@ -151,9 +170,9 @@ class BLE(
         Retorno:
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
-    override fun sendHelloMessage(deviceID: String, data: ByteArray): Boolean {
+    override fun sendHelloMessage(deviceID: String, data: ByteArray): Single<Boolean> {
         // TODO: MOCKED
-        return deviceID == "60-7D-E2-2F-C7-67"
+        return Single.create<Boolean>{emitter -> emitter.onSuccess(deviceID == "60-7D-E2-2F-C7-67") }
         // MOCKED
     }
 
@@ -180,7 +199,7 @@ class BLE(
         Retorno:
             - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
      */
-    override fun readHelloMessageResponse(deviceID: String): ByteArray? {
+    override fun readHelloMessageResponse(deviceID: String): Single<ByteArray?> {
         // TODO: MOCKED
         if (deviceID == "60-7D-E2-2F-C7-67") {
             var helloMessageResponse = ByteArray(0)
@@ -192,10 +211,11 @@ class BLE(
             val key = SecretKeySpec("MOCKEDOTP".encodeToByteArray(), "RC4")
             val macInstance = Mac.getInstance("hmacMD5")
             macInstance.init(key)
-            return macInstance.doFinal(helloMessageResponse)
+            val result = macInstance.doFinal(helloMessageResponse)
+            return Single.create<ByteArray?>{emitter -> emitter.onSuccess(result) }
         }
 
-        return null
+        return Single.create<ByteArray?>{emitter -> emitter.onSuccess(ByteArray(0)) }
         // MOCKED
     }
 
@@ -210,10 +230,13 @@ class BLE(
         Retorno:
             - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
      */
-    override fun readData(deviceID: String): ByteArray? {
-        if (deviceID == "")
-            return null
-        return ByteArray(1)
+    override fun readData(deviceID: String): Single<ByteArray?> {
+        return Single.create<ByteArray?>{emitter ->
+            if (deviceID == "")
+                emitter.onSuccess(ByteArray(0))
+            emitter.onSuccess(ByteArray(1))
+
+        }
     }
 
     /*
@@ -228,8 +251,10 @@ class BLE(
         Retorno:
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
-    override fun writeData(deviceID: String, data: ByteArray): Boolean {
-        return false
+    override fun writeData(deviceID: String, data: ByteArray): Single<Boolean> {
+        // TODO: MOCKED
+        return Single.create<Boolean>{emitter -> emitter.onSuccess(false) }
+        // MOCKED
     }
 
 }

@@ -1,5 +1,9 @@
 package br.pucrio.inf.lac.edgesecinterfaces
 
+import io.reactivex.Observable
+import io.reactivex.Single
+import java.util.*
+
 interface ITransportPlugin {
 
     /*
@@ -10,7 +14,7 @@ interface ITransportPlugin {
         Retorno:
             - lista de IDs de dispositivos encontrados
      */
-    fun scanForDevices(): Array<String>;
+    fun scanForCompatibleDevices(): Observable<Array<String>>;
 
     /*
        Se conecta com o dispositivo através do protocolo de transporte
@@ -21,7 +25,7 @@ interface ITransportPlugin {
        Retorno:
            - true em caso de conectado com sucesso, false caso contrário
     */
-    fun connect(deviceID: String): Boolean;
+    fun connect(deviceID: String): Single<Boolean>;
 
     /*
         Verifica se o dispositivo é compatível com a arquitetura EdgeSec.
@@ -32,7 +36,7 @@ interface ITransportPlugin {
         Retorno:
             - true em caso de compatível, false em caso de não compatível
      */
-    fun verifyDeviceCompatibility(deviceID: String): Boolean;
+    fun verifyDeviceCompatibility(deviceID: String): Single<Boolean>;
 
     /*
         Envia mensagem de hello do processo de handshake
@@ -44,7 +48,7 @@ interface ITransportPlugin {
         Retorno:
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
-    fun sendHandshakeHello(deviceID: String, data: ByteArray): Boolean;
+    fun sendHandshakeHello(deviceID: String, data: ByteArray): Single<Boolean>;
 
     /*
         Faz a leitura da resposta do processo do handshake Hello. Depedendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
@@ -57,7 +61,7 @@ interface ITransportPlugin {
         Retorno:
             - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
      */
-    fun readHandshakeResponse(deviceID: String): ByteArray?;
+    fun readHandshakeResponse(deviceID: String): Single<ByteArray?>;
 
     /*
         Envia mensagem de de término do handshake
@@ -69,7 +73,7 @@ interface ITransportPlugin {
         Retorno:
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
-    fun sendHandshakeFinished(deviceID: String, data: ByteArray): Boolean;
+    fun sendHandshakeFinished(deviceID: String, data: ByteArray): Single<Boolean>;
 
     /*
         Envia hello message do processo de autenticação
@@ -81,7 +85,7 @@ interface ITransportPlugin {
         Retorno:
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
-    fun sendHelloMessage(deviceID: String, data: ByteArray): Boolean;
+    fun sendHelloMessage(deviceID: String, data: ByteArray): Single<Boolean>;
 
     /*
         Faz a leitura da resposta dda hello message. Depedendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
@@ -94,7 +98,7 @@ interface ITransportPlugin {
         Retorno:
             - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
      */
-    fun readHelloMessageResponse(deviceID: String): ByteArray?;
+    fun readHelloMessageResponse(deviceID: String): Single<ByteArray?>;
 
     /*
         Faz a leitura de um dado do dispositivo. Depedendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
@@ -107,7 +111,7 @@ interface ITransportPlugin {
         Retorno:
             - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
      */
-    fun readData(deviceID: String): ByteArray?;
+    fun readData(deviceID: String): Single<ByteArray?>;
 
     /*
         Faz a escrita de um dado no dispositivo.
@@ -121,6 +125,6 @@ interface ITransportPlugin {
         Retorno:
             - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
      */
-    fun writeData(deviceID: String, data: ByteArray): Boolean;
+    fun writeData(deviceID: String, data: ByteArray): Single<Boolean>;
 
 }
