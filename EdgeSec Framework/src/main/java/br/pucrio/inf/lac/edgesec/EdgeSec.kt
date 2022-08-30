@@ -18,21 +18,21 @@ class EdgeSec() : IEdgeSec {
 
     private val TAG = "EdgeSec"
     private val EdgeSecVersion = "1.0"
-    private var gatewayID: String = "";
-    private var transportPlugin: ITransportPlugin? = null;
-    private var cryptoPlugins: ArrayList<ICryptographicPlugin>? = null;
-    private var authPlugins: ArrayList<IAuthenticationPlugin>? = null;
+    private var gatewayID: String = ""
+    private var transportPlugin: ITransportPlugin? = null
+    private var cryptoPlugins: ArrayList<ICryptographicPlugin>? = null
+    private var authPlugins: ArrayList<IAuthenticationPlugin>? = null
     private var selectedCryptoPlugin: ICryptographicPlugin? = null
     private var selectedAuthPlugin: IAuthenticationPlugin? = null
 
-    private var authorization: Authorization? = null;
-    private var secureConnections: MutableMap<String, SecureConnection>? = null;
+    private var authorization: Authorization? = null
+    private var secureConnections: MutableMap<String, SecureConnection>? = null
 
     init {
     }
 
     fun print(s: String) {
-        System.out.println("[EDGESEC-DEBUG] " + s);
+        System.out.println("[EDGESEC-DEBUG-$TAG] " + s)
     }
 
     override fun initialize(
@@ -46,29 +46,30 @@ class EdgeSec() : IEdgeSec {
         if (gatewayID.length != Constants.GATEWAY_ID_BYTES_SIZE) {
             throw Exception("Invalid gateway ID: should be of size :" + Constants.GATEWAY_ID_BYTES_SIZE + ". actual size is: " + gatewayID.length)
         }
-        this.gatewayID = gatewayID;
-        this.transportPlugin = transportPlugin;
+        this.gatewayID = gatewayID
+        this.transportPlugin = transportPlugin
         if (cryptoPlugins.size > 0)
-            this.cryptoPlugins = cryptoPlugins;
+            this.cryptoPlugins = cryptoPlugins
         if (authPlugins.size > 0)
-            this.authPlugins = authPlugins;
+            this.authPlugins = authPlugins
 
         // Initialize classes and wrappers
-        this.authorization = Authorization();
+        this.authorization = Authorization()
 
         // Initialize internal variables
-        this.secureConnections = mutableMapOf<String, SecureConnection>();
+        this.secureConnections = mutableMapOf<String, SecureConnection>()
     }
 
     override fun searchDevices(): Observable<String> {
 
         // Check if transport plugin is set
-        this.transportPlugin ?: throw Exception("Transport Plugin not initialized");
+        this.transportPlugin ?: throw Exception("Transport Plugin not initialized")
 
         // Call transport plugin to scan for compatible devices
-        return this.transportPlugin!!.scanForCompatibleDevices();
+        return this.transportPlugin!!.scanForCompatibleDevices()
     }
 
+    @Suppress("CheckResult")
     override fun secureConnect(deviceID: String): Single<Boolean> {
 
         // Verify if plugins are correctly set
@@ -80,7 +81,7 @@ class EdgeSec() : IEdgeSec {
         return Single.create { emitter ->
             // Try to connect and perform EdgeSec handshake to negotiate authentication and cryptographic protocols
             this.connectAndHandshake(deviceID).subscribe({
-                val objectID = it;
+                val objectID = it
 
                 // Chama classe de Authorization para verificar se dispositivo pode se comunicar com o gateway
                 val authorizationResponse =
@@ -112,7 +113,7 @@ class EdgeSec() : IEdgeSec {
 
                 // Chama função exchangeHelloMessage para enviar e receber resposta da Hello Message
                 exchangeHelloMessage(deviceID, signedHelloMessage).subscribe({
-                    val helloMessageResponse = it;
+                    val helloMessageResponse = it
                     print("HelloMessageResponse: " + helloMessageResponse!!.decodeByteArrayToHexString())
 
                     // Chama classe AuthenticationPlugin para verificar assinatura da resposta da Hello Message
@@ -137,13 +138,14 @@ class EdgeSec() : IEdgeSec {
                     secureConnections?.put(deviceID, newSecureConnection)
                         ?: throw Exception("Error creating secureConnection")
 
-                    emitter.onSuccess(true);
+                    emitter.onSuccess(true)
 
                 }, { emitter.onError(it) })
             }, { emitter.onError(it) })
         }
     }
 
+    @Suppress("CheckResult")
     override fun secureRead(deviceID: String): Single<ByteArray> {
 
         // Verifica se dispositivo está na lista de conectados e autenticados
@@ -175,9 +177,7 @@ class EdgeSec() : IEdgeSec {
                 // Responde com valor da mensagem
                 emitter.onSuccess(decryptedData)
             }, { emitter.onError(it) })
-        };
-
-
+        }
     }
 
     override fun secureWrite(deviceID: String, data: ByteArray): Single<Boolean> {
@@ -197,6 +197,7 @@ class EdgeSec() : IEdgeSec {
         return transportPlugin!!.writeData(deviceID, message)
     }
 
+    @Suppress("CheckResult")
     private fun connectAndHandshake(deviceID: String): Single<String> {
 
         return Single.create { emitter ->
@@ -204,7 +205,7 @@ class EdgeSec() : IEdgeSec {
             this.transportPlugin!!.connect(deviceID).subscribe(
                 {
                     if (it === false) {
-                        emitter.onError(Exception("Failed to connect to device"));
+                        emitter.onError(Exception("Failed to connect to device"))
                     }
 
                     print("Starting handshake")
@@ -216,10 +217,10 @@ class EdgeSec() : IEdgeSec {
 
                     // Build HandshakeHello message with EdgeSecVersion + gateway ID
                     val version = this.EdgeSecVersion.encodeToByteArray()
-                    val gatewayID = this.gatewayID.encodeToByteArray();
-                    val handshakeHelloMessage: ByteArray = version + gatewayID;
+                    val gatewayID = this.gatewayID.encodeToByteArray()
+                    val handshakeHelloMessage: ByteArray = version + gatewayID
 
-                    print("Sending handshake: " + handshakeHelloMessage.decodeByteArrayToHexString());
+                    print("Sending handshake: " + handshakeHelloMessage.decodeByteArrayToHexString())
 
                     //Send HandshakeHello message
                     this.transportPlugin!!.sendHandshakeHello(deviceID, handshakeHelloMessage)
@@ -227,7 +228,7 @@ class EdgeSec() : IEdgeSec {
                             {
                                 if (!it)
                                     throw Exception("Failed to send handshakeHello")
-                                print("Handshake sent");
+                                print("Handshake sent")
 
                                 // Chama classe de TransportPlugin para ler mensagem do dispositivo com:
                                 // - ID do objeto
@@ -239,7 +240,7 @@ class EdgeSec() : IEdgeSec {
                                             throw Exception("Failed to read handshakeHelloResponse")
 
                                         val handshakeResponse = it
-                                        var lastIndexRead = 0;
+                                        var lastIndexRead = 0
 
                                         // Get Device Authentication ID
                                         val objectID: String = handshakeResponse!!.slice(
@@ -248,7 +249,7 @@ class EdgeSec() : IEdgeSec {
                                                 lastIndexRead + Constants.DEVICE_ID_BYTES_SIZE - 1
                                             )
                                         ).toByteArray().decodeToString()
-                                        lastIndexRead += Constants.DEVICE_ID_BYTES_SIZE;
+                                        lastIndexRead += Constants.DEVICE_ID_BYTES_SIZE
 
                                         print("objectID: " + objectID)
                                         emitter.onSuccess(objectID)

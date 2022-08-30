@@ -1,3 +1,8 @@
+/*
+Module: ContextNetCore.kt
+Description: Module that simulates actions executed in processing servers on ContextNetCore
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.contextnetcore
 
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin

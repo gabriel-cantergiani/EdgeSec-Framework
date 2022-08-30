@@ -1,3 +1,8 @@
+/*
+Module: ITransportPlugin.kt
+Description: Interface for plugin that provides a transportation protocol implementation, compatible with EdgeSec framework
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.edgesecinterfaces
 
 import io.reactivex.Observable

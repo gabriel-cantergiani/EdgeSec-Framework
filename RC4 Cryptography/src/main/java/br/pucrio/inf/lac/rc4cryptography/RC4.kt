@@ -1,3 +1,8 @@
+/*
+Module: RC4.kt
+Description: Main module that implements RC4 protocol as an ICryptographicPlugin
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.rc4cryptography
 
 import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin

@@ -1,3 +1,8 @@
+/*
+Module: IEdgeSec.kt
+Description: Public interface for using EdgeSec framework
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.edgesec
 
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin

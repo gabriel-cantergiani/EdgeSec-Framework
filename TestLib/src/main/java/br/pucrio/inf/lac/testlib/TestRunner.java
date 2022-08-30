@@ -34,10 +34,10 @@ public class TestRunner {
         System.out.println("[DEBUG] Edgesec initialized");
 
         edgeSec.searchDevices().subscribe(resp -> {
-            ArrayList<String> devicesFound = resp;
+            String devicesFound = resp;
             System.out.println("[DEBUG] Devices found: " + devicesFound);
 
-            edgeSec.secureConnect(devicesFound.get(0)).subscribe(resp2 -> {
+            edgeSec.secureConnect(devicesFound).subscribe(resp2 -> {
                 System.out.println("[DEBUG] Secure connect result: " + resp2);
             }, error2 -> {System.out.println("[DEBUG] ERROR: " + error2); });
         }, error -> {

@@ -1,3 +1,8 @@
+/*
+Module: HmacMD5.kt
+Description: Main module that implements HmacMD5 protocol as an IAuthenticationPlugin
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.hmacmd5authentication
 
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin

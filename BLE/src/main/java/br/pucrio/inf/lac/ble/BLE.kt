@@ -1,3 +1,7 @@
+/*
+Module: BLE.kt
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.ble
 
 import android.util.Log
@@ -14,7 +18,10 @@ import java.util.*
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-
+/*
+Class: BLE.kt
+Description: Main class for BLE plugin - implements ITransportPlugin interface
+ */
 class BLE(
     private val bleClient: RxBleClient
 ) : ITransportPlugin {
@@ -40,12 +47,10 @@ class BLE(
     }
 
     /*
-        Escaneia por dispositivos compatíveis com o protocolo de transporte nas redondezas.
+        Scan for nearby compatible devices using the BLE transport protocol
 
-        ??? Possíveis parametros de distancia limite ou tempo limite ???
-
-        Retorno:
-            - lista de IDs de dispositivos encontrados
+        Returns:
+            - Observable that emits the MacAddress of devices that are found
      */
     override fun scanForCompatibleDevices(): Observable<String> {
         // TODO: Review verifyCompatibility before returning it
@@ -55,13 +60,13 @@ class BLE(
     }
 
     /*
-       Se conecta com o dispositivo através do protocolo de transporte
+       Tries to connect with a device using BLE protocol
 
-       Parametros:
-           - device_id: string identificadora do dispositivo
+       Parameters:
+           - device_id: string identifying MacAddress of device
 
-       Retorno:
-           - true em caso de conectado com sucesso, false caso contrário
+       Returns:
+           - Observable that emits true if connection was successful, false otherwise
     */
     override fun connect(deviceID: String): Single<Boolean> {
         return Single.create<Boolean> {
@@ -85,13 +90,13 @@ class BLE(
     }
 
     /*
-        Verifica se o dispositivo é compatível com a arquitetura EdgeSec.
+        Verifies if device is compatible with EdgeSec architecture
 
-        Parametros:
-            - device_id: string identificadora do dispositivo
+        Parameters:
+            - device_id: string identifying MacAddress of device
 
-        Retorno:
-            - true em caso de compatível, false em caso de não compatível
+        Returns:
+            - Observable that emits true if it is successful, and false otherwise
      */
     override fun verifyDeviceCompatibility(deviceID: String): Single<Boolean> {
         // TODO: MOCKED
@@ -100,57 +105,55 @@ class BLE(
     }
 
     /*
-        Envia mensagem de hello do processo de handshake
+        Sends the handshakeHelloMessage to device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
-            - data: array de bytes com os dados a serem escritos
+        Parameters:
+            - device_id: string identifying MacAddress of device
+            - data: ByteArray with data to be sent
 
-        Retorno:
-            - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
+        Returns:
+            - Observable that emits true if it is successful, false otherwise
      */
     override fun sendHandshakeHello(deviceID: String, data: ByteArray): Single<Boolean> {
         return writeDataToCharacteristic(deviceID, data, "HANDSHAKE_HELLO_UUID")
     }
 
     /*
-        Faz a leitura da resposta do processo do handshake Hello. Depedendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
+        Reads the handshakeResponse from device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
+        Parameters:
+            - device_id: string identifying MacAddress of device
 
-        ** (plugin deve decidir se dá para ler em uma só mensagem ou é necessário quebrar mensagem em várias partes)
-
-        Retorno:
-            - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
+        Returns:
+            - Observable that emits a ByteArray containing the data that was read in case of success, and null in case of error.
      */
     override fun readHandshakeResponse(deviceID: String): Single<ByteArray?> {
         return readDataFromCharacteristic(deviceID, "HANDSHAKE_RESPONSE_UUID")
     }
 
     /*
-        Envia mensagem de de término do handshake
+        Send handshakeFinish message to device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
-            - data: array de bytes com os dados a serem escritos
+        Parameters:
+            - device_id: string identifying MacAddress of device
+            - data: ByteArray with data to be sent
 
-        Retorno:
-            - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
+        Returns:
+            - Observable that emits true in case of successful write, and false otherwise.
      */
     override fun sendHandshakeFinished(deviceID: String, data: ByteArray): Single<Boolean> {
         return writeDataToCharacteristic(deviceID, data, "HANDSHAKE_FINISH_UUID")
     }
 
     /*
-        Envia hello message do processo de autenticação
+        Sends hello message to device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
-            - data: array de bytes com os dados a serem escritos
+        Parameters:
+            - device_id: string identifying MacAddress of device
+            - data: ByteArray with data to be sent
 
-        Retorno:
-            - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
+        Returns:
+            - Observable that emits true in case of successful write, and false otherwise.
      */
     override fun sendHelloMessage(deviceID: String, data: ByteArray): Single<Boolean> {
         // TODO: Break data in 3 parts of 20 bytes
@@ -158,51 +161,56 @@ class BLE(
     }
 
     /*
-        Faz a leitura da resposta da hello message. Dependendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
+        Reads the HelloMessageResponse
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
+        Parameters:
+            - device_id: string identifying MacAddress of device
 
-        ** (plugin deve decidir se dá para ler em uma só mensagem ou é necessário quebrar mensagem em várias partes)
-
-        Retorno:
-            - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
+        Returns:
+            - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
     override fun readHelloMessageResponse(deviceID: String): Single<ByteArray?> {
         return readDataFromCharacteristic(deviceID, "READ_HELLO_MESSAGE_UUID")
     }
 
     /*
-        Faz a leitura de um dado do dispositivo. Depedendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
+        Reads data from device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
+        Parameters:
+            - device_id: string identifying MacAddress of device
 
-        ** (plugin deve decidir se dá para ler em uma só mensagem ou é necessário quebrar mensagem em várias partes)
-
-        Retorno:
-            - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
+        Returns:
+            - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
     override fun readData(deviceID: String): Single<ByteArray?> {
         return readDataFromCharacteristic(deviceID, "READ_DATA_UUID")
     }
 
     /*
-        Faz a escrita de um dado no dispositivo.
+        Writes data to device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
-            - data: array de bytes com os dados a serem escritos
+        Parameters:
+            - device_id: string identifying MacAddress of device
+            - data: ByteArray with data to be sent
 
-        ** (plugin deve decidir se dá para enviar em uma só mensagem ou é necessário quebrar mensagem em várias partes)
-
-        Retorno:
-            - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
+        Returns:
+            - Observable that emits true if write is successful, and false otherwise.
      */
     override fun writeData(deviceID: String, data: ByteArray): Single<Boolean> {
         return writeDataToCharacteristic(deviceID, data, "WRITE_DATA_UUID")
     }
 
+    /*
+        Generic auxiliary function that writes data to a certain BLE characteristic
+
+        Parameters:
+            - device_id: string identifying MacAddress of device
+            - data: ByteArray with data to be written in characteristic
+            - characteristicName: Name of characteristic in map
+
+        Returns:
+            - Observable that emits true if write is successful, and false otherwise.
+     */
     private fun writeDataToCharacteristic(deviceID: String, data: ByteArray, characteristicName: String): Single<Boolean> {
         val connection = connectionsCache[deviceID] ?: return Single.just(false)
 
@@ -220,6 +228,16 @@ class BLE(
         }
     }
 
+    /*
+        Generic auxiliary function that reads data from a certain BLE characteristic
+
+        Parameters:
+            - device_id: string identifying MacAddress of device
+            - characteristicName: Name of characteristic in map
+
+        Returns:
+            - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
+     */
     private fun readDataFromCharacteristic(deviceID: String, characteristicName: String): Single<ByteArray?> {
         val connection = connectionsCache[deviceID] ?: return Single.just(null)
 
@@ -237,6 +255,12 @@ class BLE(
         }
     }
 
+    /*
+         Auxiliary function that configures the scan of devices using bleClient
+
+        Returns:
+            - Observable that emits a ScanResult.
+     */
     private fun configureScan(): Observable<ScanResult> = bleClient.scanBleDevices(
         ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
@@ -244,6 +268,12 @@ class BLE(
             .build()
     )
 
+    /*
+         Auxiliary function that is used to check if an Observable has state ready
+
+        Returns:
+            - Observable that emits a ScanResult.
+     */
     private fun Observable<Throwable>.observeIfStateIsReady(): Observable<ScanResult> = flatMap {
         bleClient.observeStateChanges()
             .switchMap { configureScanIfReady(it) }
@@ -251,6 +281,15 @@ class BLE(
             .onErrorResumeNext(Observable.empty())
     }
 
+    /*
+         Auxiliary function that configures the scan of devices depending on a client state
+
+         Parameters:
+            - state of BLE client
+
+        Returns:
+            - Observable that emits a ScanResult.
+     */
     private fun configureScanIfReady(state: RxBleClient.State): Observable<ScanResult> = when (state) {
         RxBleClient.State.READY -> configureScan()
         RxBleClient.State.BLUETOOTH_NOT_AVAILABLE -> throw Exception("Bluetooth not available")

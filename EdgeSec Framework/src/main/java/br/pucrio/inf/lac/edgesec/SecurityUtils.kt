@@ -1,3 +1,8 @@
+/*
+Module: SecurityUtils.kt
+Description: Utility functions
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.edgesec
 
 

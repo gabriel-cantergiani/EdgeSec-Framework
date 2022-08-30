@@ -1,3 +1,8 @@
+/*
+Module: Constants.kt
+Description: Constant values used in package
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.contextnetcore
 
 object Constants {

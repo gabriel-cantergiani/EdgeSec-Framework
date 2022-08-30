@@ -1,3 +1,8 @@
+/*
+Module: SecureConnection.kt
+Description: Data module to store variables needed after connection is established
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.edgesec
 
 class SecureConnection(

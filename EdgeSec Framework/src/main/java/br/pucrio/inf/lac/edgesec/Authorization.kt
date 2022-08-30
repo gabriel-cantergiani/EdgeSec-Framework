@@ -1,3 +1,8 @@
+/*
+Module: Authorization.kt
+Description: Wrapper for encapsulating communication with authorization server
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.edgesec
 
 import br.pucrio.inf.lac.contextnetcore.AuthorizationResponse

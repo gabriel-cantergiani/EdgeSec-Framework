@@ -1,3 +1,8 @@
+/*
+Module: IAuthenticationPlugin.kt
+Description: Interface for plugin that provides an authentication implementation, compatible with EdgeSec framework
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.edgesecinterfaces
 
 import java.security.Key
