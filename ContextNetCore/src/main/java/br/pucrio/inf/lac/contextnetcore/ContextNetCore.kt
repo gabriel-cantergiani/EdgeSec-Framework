@@ -11,23 +11,23 @@ object ContextNetCore {
 
     private val coreAuthKey = "Kauth_core".encodeToByteArray();
 
-    private val registeredObjects = arrayOf<String>("0879C623C9C8", "607DE22FC767");
+    private val registeredObjects = arrayOf<String>("0879C623C9C8", "24:6F:28:B5:D8:3A");
     private val objectsAuthKeys = mapOf<String, ByteArray>(
         "0879C623C9C8" to "Kauth_Obj1".encodeToByteArray(),
-        "607DE22FC767" to "Kauth_Obj2".encodeToByteArray(),
+        "24:6F:28:B5:D8:3A" to "Kauth_Obj2".encodeToByteArray(),
     )
     private val objectsCipherKeys = mapOf<String, ByteArray>(
         "0879C623C9C8" to "Kcipher_Obj1".encodeToByteArray(),
-        "607DE22FC767" to "Kcipher_Obj2".encodeToByteArray(),
+        "24:6F:28:B5:D8:3A" to "Kcipher_Obj2".encodeToByteArray(),
     )
 
     private val objectsSupportedProtocolSuites = mapOf<String, Array<String>>(
         "0879C623C9C8" to arrayOf<String>("RC4_HMAC_MD5", "AES128_HMAC_MD5"),
-        "607DE22FC767" to arrayOf<String>("RC4_HMAC_MD5"),
+        "24:6F:28:B5:D8:3A" to arrayOf<String>("RC4_HMAC_MD5"),
     )
     private val objectsAuthorizedGateways = mapOf<String, Array<String>>(
         "0879C623C9C8" to arrayOf<String>("736DF76FC9KU", "LK9JD765JKO9"),
-        "607DE22FC767" to arrayOf<String>("808DE88FC8TE", "736DF76FC9KU"),
+        "24:6F:28:B5:D8:3A" to arrayOf<String>("808DE88FC8TE", "02:00:00:00:00:00"),
     )
 
     private var cryptoPlugins = mapOf<String, ICryptographicPlugin>(
@@ -131,10 +131,7 @@ object ContextNetCore {
     ): ByteArray {
         val concatenation =
             objectID.encodeToByteArray() + gatewayID.encodeToByteArray() + otpChallenge + objectsAuthKeys[objectID]!!
-        // TODO: MOCKED GENERATE OTP FOR TESTING
-        return "MOCKEDOTP".encodeToByteArray()
-//        return authPlugin.generateHash(concatenation)
-        // MOCKED
+        return authPlugin.generateHash(concatenation)
     }
 
 

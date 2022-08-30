@@ -1,3 +1,8 @@
+/*
+Module: AuthenticationPackage.kt
+Description: Data class to store variables related to authentication process
+Author: Gabriel Cantergiani
+ */
 package br.pucrio.inf.lac.edgesec
 
 import javax.crypto.spec.SecretKeySpec

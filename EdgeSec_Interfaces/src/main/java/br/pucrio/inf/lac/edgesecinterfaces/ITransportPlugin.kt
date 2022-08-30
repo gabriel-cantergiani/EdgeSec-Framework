@@ -14,7 +14,7 @@ interface ITransportPlugin {
         Retorno:
             - lista de IDs de dispositivos encontrados
      */
-    fun scanForCompatibleDevices(): Observable<Array<String>>;
+    fun scanForCompatibleDevices(): Observable<String>;
 
     /*
        Se conecta com o dispositivo através do protocolo de transporte

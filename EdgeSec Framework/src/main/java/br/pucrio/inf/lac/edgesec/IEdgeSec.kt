@@ -26,7 +26,7 @@ interface IEdgeSec {
     Retorno:
         - lista de IDs dos dispositivos compatíveis encontrados.
      */
-    fun searchDevices(): Observable<ArrayList<String>>;
+    fun searchDevices(): Observable<String>;
 
 
     /*

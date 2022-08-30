@@ -2,8 +2,8 @@ package br.pucrio.inf.lac.edgesec
 
 object Constants {
     const val EDGESEC_VERSION_BYTES_SIZE = 2
-    const val GATEWAY_ID_BYTES_SIZE = 12
-    const val DEVICE_ID_BYTES_SIZE = 12
+    const val GATEWAY_ID_BYTES_SIZE = 17
+    const val DEVICE_ID_BYTES_SIZE = 17
 
     // Handshake
     const val HANDSHAKE_HELLO_BYTES_SIZE = EDGESEC_VERSION_BYTES_SIZE + GATEWAY_ID_BYTES_SIZE
