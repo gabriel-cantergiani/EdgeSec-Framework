@@ -1,17 +1,17 @@
 /*
-Module: SecurityUtils.kt
+Module: Utils.kt
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesec
 
 
 /*
-Class: SecurityUtils
+Class: Utils
 Description: Utility functions
  */
-class SecurityUtils {
+class Utils {
 
-    private val TAG = "SecurityUtils"
+    private val TAG = "Utils"
 
     init {
     }

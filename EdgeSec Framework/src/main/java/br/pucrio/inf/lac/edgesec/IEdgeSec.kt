@@ -1,6 +1,5 @@
 /*
 Module: IEdgeSec.kt
-Description: Public interface for using EdgeSec framework
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesec
@@ -11,6 +10,10 @@ import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
 import io.reactivex.Observable
 import io.reactivex.Single
 
+/*
+Interface: IEdgeSec
+Description: Public interface for using EdgeSec framework
+ */
 interface IEdgeSec {
 
     /*

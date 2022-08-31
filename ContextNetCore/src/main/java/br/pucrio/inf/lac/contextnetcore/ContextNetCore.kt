@@ -14,7 +14,7 @@ import com.google.gson.Gson
 Object: ContextNetCore
 Description: Module that simulates actions executed in processing servers on ContextNetCore
  */
-object ContextNetCore {
+object ContextNetCore : IAuthorizationProvider {
 
     private val coreAuthKey = "Kauth_core".encodeToByteArray();
 
@@ -59,7 +59,7 @@ object ContextNetCore {
                 - A boolean that has value true if devices are authorized, and false otherwise
                 - A String representing the serialized JSON of the Authorization Response
     */
-    fun authorize(gatewayID: String, objectID: String): Pair<Boolean, String> {
+    override fun authorize(gatewayID: String, objectID: String): Pair<Boolean, String> {
 
         // Validate if object is registered
         if (!registeredObjects.contains(objectID))

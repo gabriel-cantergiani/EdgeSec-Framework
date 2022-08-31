@@ -65,7 +65,7 @@ interface ITransportPlugin {
         Returns:
             - Observable that emits a ByteArray containing the data that was read in case of success, and null in case of error.
      */
-    fun readHandshakeResponse(deviceID: String): Single<ByteArray?>;
+    fun readHandshakeResponse(deviceID: String): Single<ByteArray>;
 
     /*
         Send handshakeFinish message to device
@@ -100,7 +100,7 @@ interface ITransportPlugin {
         Returns:
             - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
-    fun readHelloMessageResponse(deviceID: String): Single<ByteArray?>;
+    fun readHelloMessageResponse(deviceID: String): Single<ByteArray>;
 
     /*
         Reads data from device
@@ -111,7 +111,7 @@ interface ITransportPlugin {
         Returns:
             - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
-    fun readData(deviceID: String): Single<ByteArray?>;
+    fun readData(deviceID: String): Single<ByteArray>;
 
     /*
         Writes data to device

@@ -15,8 +15,6 @@ import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
 import java.util.*
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 /*
 Class: BLE.kt
@@ -127,7 +125,7 @@ class BLE(
         Returns:
             - Observable that emits a ByteArray containing the data that was read in case of success, and null in case of error.
      */
-    override fun readHandshakeResponse(deviceID: String): Single<ByteArray?> {
+    override fun readHandshakeResponse(deviceID: String): Single<ByteArray> {
         return readDataFromCharacteristic(deviceID, "HANDSHAKE_RESPONSE_UUID")
     }
 
@@ -169,7 +167,7 @@ class BLE(
         Returns:
             - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
-    override fun readHelloMessageResponse(deviceID: String): Single<ByteArray?> {
+    override fun readHelloMessageResponse(deviceID: String): Single<ByteArray> {
         return readDataFromCharacteristic(deviceID, "READ_HELLO_MESSAGE_UUID")
     }
 
@@ -182,7 +180,7 @@ class BLE(
         Returns:
             - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
-    override fun readData(deviceID: String): Single<ByteArray?> {
+    override fun readData(deviceID: String): Single<ByteArray> {
         return readDataFromCharacteristic(deviceID, "READ_DATA_UUID")
     }
 
@@ -212,7 +210,7 @@ class BLE(
             - Observable that emits true if write is successful, and false otherwise.
      */
     private fun writeDataToCharacteristic(deviceID: String, data: ByteArray, characteristicName: String): Single<Boolean> {
-        val connection = connectionsCache[deviceID] ?: return Single.just(false)
+        val connection = connectionsCache[deviceID] ?: return Single.create{emitter -> emitter.onError(Exception("Device is not connected and authenticated"))}
 
         return Single.create<Boolean> { emitter ->
             connection.writeCharacteristic(characteristics[characteristicName]!!, data).subscribe(
@@ -238,8 +236,8 @@ class BLE(
         Returns:
             - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
-    private fun readDataFromCharacteristic(deviceID: String, characteristicName: String): Single<ByteArray?> {
-        val connection = connectionsCache[deviceID] ?: return Single.just(null)
+    private fun readDataFromCharacteristic(deviceID: String, characteristicName: String): Single<ByteArray> {
+        val connection = connectionsCache[deviceID] ?: return Single.create{emitter -> emitter.onError(Exception("Device is not connected and authenticated"))}
 
         return Single.create<ByteArray> { emitter ->
             connection.readCharacteristic(characteristics[characteristicName]!!).subscribe(

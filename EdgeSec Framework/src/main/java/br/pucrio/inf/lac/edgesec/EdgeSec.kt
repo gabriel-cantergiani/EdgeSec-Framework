@@ -4,8 +4,8 @@ Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesec
 
-import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.decodeByteArrayToHexString
-import br.pucrio.inf.lac.edgesec.SecurityUtils.Companion.encodeToByteArray
+import br.pucrio.inf.lac.edgesec.Utils.Companion.decodeByteArrayToHexString
+import br.pucrio.inf.lac.edgesec.Utils.Companion.encodeToByteArray
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
 import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
 import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
@@ -62,10 +62,16 @@ class EdgeSec() : IEdgeSec {
         }
         this.gatewayID = gatewayID
         this.transportPlugin = transportPlugin
-        if (cryptoPlugins.size > 0)
-            this.cryptoPlugins = cryptoPlugins
-        if (authPlugins.size > 0)
-            this.authPlugins = authPlugins
+
+        if (cryptoPlugins.size < 1)
+            throw Exception("Invalid crypto plugin list. Should have at least one plugin")
+
+        this.cryptoPlugins = cryptoPlugins
+
+        if (authPlugins.size < 1)
+            throw Exception("Invalid auth plugin list. Should have at least one plugin")
+
+        this.authPlugins = authPlugins
 
         // Initialize classes and wrappers
         this.authorization = Authorization()
@@ -115,61 +121,65 @@ class EdgeSec() : IEdgeSec {
                 // Invoke Authorization class to verify if connection is allowed
                 val authorizationResponse =
                     this.authorization?.verifyAuthorization(this.gatewayID, objectID)
-                        ?: throw Exception("Failed to get authorization from Core")
 
-                val authenticationPackage = buildAuthenticationPackage(
-                    authorizationResponse.protocolSuite,
-                    authorizationResponse.authenticatioPackage,
-                    authorizationResponse.OTP,
-                    authorizationResponse.sessionKey
-                )
+                if (authorizationResponse == null)
+                    emitter.onError(Exception("Failed to get authorization from Core"))
+                else {
+                    val authenticationPackage = buildAuthenticationPackage(
+                        authorizationResponse.protocolSuite,
+                        authorizationResponse.authenticatioPackage,
+                        authorizationResponse.OTP,
+                        authorizationResponse.sessionKey
+                    )
 
-                print("OTP: " + authenticationPackage.OTP.decodeByteArrayToHexString())
-                print("SessionKey: " + authenticationPackage.SessionKey.decodeByteArrayToHexString())
-                print("Timestamp: " + authenticationPackage.messageTimestamp.decodeByteArrayToHexString())
-                print("Signed Auth Package: " + authenticationPackage.signedAuthPackage.decodeByteArrayToHexString())
-                print("Protocol suite: " + authenticationPackage.protocolSuite)
+                    print("OTP: " + authenticationPackage.OTP.decodeByteArrayToHexString())
+                    print("SessionKey: " + authenticationPackage.SessionKey.decodeByteArrayToHexString())
+                    print("Timestamp: " + authenticationPackage.messageTimestamp.decodeByteArrayToHexString())
+                    print("Signed Auth Package: " + authenticationPackage.signedAuthPackage.decodeByteArrayToHexString())
+                    print("Protocol suite: " + authenticationPackage.protocolSuite)
 
-                // Set plugins
-                setPlugins(authenticationPackage.protocolSuite)
+                    // Set plugins
+                    setPlugins(authenticationPackage.protocolSuite)
 
-                if (selectedAuthPlugin == null || selectedCryptoPlugin == null)
-                    throw Exception("Plugins not compatible")
+                    if (selectedAuthPlugin == null || selectedCryptoPlugin == null)
+                        emitter.onError(Exception("Plugins not supported by smart object"))
+                    else {
+                        // Get helloMessage
+                        val signedHelloMessage = createHelloMessage(authenticationPackage)
+                        print("HelloMessage: " + signedHelloMessage.decodeByteArrayToHexString())
 
-                // Get helloMessage
-                val signedHelloMessage = createHelloMessage(authenticationPackage)
-                print("HelloMessage: " + signedHelloMessage.decodeByteArrayToHexString())
+                        // Send Hello Message
+                        exchangeHelloMessage(deviceID, signedHelloMessage).subscribe({
+                            val helloMessageResponse = it
+                            print("HelloMessageResponse: " + helloMessageResponse!!.decodeByteArrayToHexString())
 
-                // Send Hello Message
-                exchangeHelloMessage(deviceID, signedHelloMessage).subscribe({
-                    val helloMessageResponse = it
-                    print("HelloMessageResponse: " + helloMessageResponse!!.decodeByteArrayToHexString())
+                            // Invoke AuthenticatioPlugin to verify HelloMessageResponse
+                            val success =
+                                verifyHelloMessageResponse(
+                                    objectID,
+                                    authenticationPackage,
+                                    helloMessageResponse!!
+                                )
+                            if (!success) {
+                                emitter.onError(Exception("Invalid HelloMessageResponse from device"))
+                            } else {
+                                print("HelloMessageResponse validated successfully")
 
-                    // Invoke AuthenticatioPlugin to verify HelloMessageResponse
-                    val success =
-                        verifyHelloMessageResponse(
-                            objectID,
-                            authenticationPackage,
-                            helloMessageResponse!!
-                        )
-                    if (!success) {
-                        throw Exception("Invalid HelloMessageResponse")
+                                // Create SecureConnection class and add it to cache
+                                val newSecureConnection =
+                                    SecureConnection(
+                                        objectID,
+                                        authenticationPackage.SessionKey,
+                                        authenticationPackage.OTP
+                                    )
+                                secureConnections?.put(deviceID, newSecureConnection)
+                                    ?: throw Exception("Error creating secureConnection")
+
+                                emitter.onSuccess(true)
+                            }
+                        }, { emitter.onError(it) })
                     }
-                    print("HelloMessageResponse validated successfully")
-
-                    // Create SecureConnection class and add it to cache
-                    val newSecureConnection =
-                        SecureConnection(
-                            objectID,
-                            authenticationPackage.SessionKey,
-                            authenticationPackage.OTP
-                        )
-                    secureConnections?.put(deviceID, newSecureConnection)
-                        ?: throw Exception("Error creating secureConnection")
-
-                    emitter.onSuccess(true)
-
-                }, { emitter.onError(it) })
+                }
             }, { emitter.onError(it) })
         }
     }
@@ -194,26 +204,33 @@ class EdgeSec() : IEdgeSec {
             transportPlugin!!.readData(deviceID).subscribe({
                 if (it == null) {
                     emitter.onError(Exception("Failed to read data from device"))
+                } else {
+                    val message = it!!
+                    val signatureSize = selectedAuthPlugin!!.getHashSize()
+                    val divisionIndex = message.size - signatureSize
+                    val encryptedData = message.slice(IntRange(0, divisionIndex)).toByteArray()
+                    val signature =
+                        message.slice(IntRange(divisionIndex, message.size)).toByteArray()
+                    val signingKey = selectedCryptoPlugin!!.generateSecretKey(secureConnection.otp)
+
+
+                    // Invoke AuthenticationPlugin to verify message signature
+                    if (!selectedAuthPlugin!!.verifySignature(
+                            encryptedData,
+                            signingKey,
+                            signature
+                        )
+                    ) {
+                        emitter.onError(Exception("Failed to validate message signature"))
+                    }
+
+                    // Invoke CryptographyPlugin to decrypt message
+                    val decryptedData =
+                        selectedCryptoPlugin!!.decrypt(encryptedData, secureConnection.sessionKey)
+
+                    // Emit message value
+                    emitter.onSuccess(decryptedData)
                 }
-                val message = it!!
-                val signatureSize = selectedAuthPlugin!!.getHashSize()
-                val divisionIndex = message.size - signatureSize
-                val encryptedData = message.slice(IntRange(0, divisionIndex)).toByteArray()
-                val signature = message.slice(IntRange(divisionIndex, message.size)).toByteArray()
-                val signingKey = selectedCryptoPlugin!!.generateSecretKey(secureConnection.otp)
-
-
-                // Invoke AuthenticationPlugin to verify message signature
-                if (!selectedAuthPlugin!!.verifySignature(encryptedData, signingKey, signature)) {
-                    emitter.onError(Exception("Failed to validate message signature"))
-                }
-
-                // Invoke CryptographyPlugin to decrypt message
-                val decryptedData =
-                    selectedCryptoPlugin!!.decrypt(encryptedData, secureConnection.sessionKey)
-
-                // Emit message value
-                emitter.onSuccess(decryptedData)
             }, { emitter.onError(it) })
         }
     }
@@ -263,61 +280,62 @@ class EdgeSec() : IEdgeSec {
                 {
                     if (it === false) {
                         emitter.onError(Exception("Failed to connect to device"))
+                    } else {
+                        print("Starting handshake")
+
+                        // TODO: Review verifyCompatibility
+                        // Use transport plugin to verify if device is compatible with EdgeSec
+                        //        if (!this.transportPlugin!!.verifyDeviceCompatibility(deviceID))
+                        //            throw Exception("Device is not compatible with EdgeSec");
+
+                        // Build HandshakeHello message with EdgeSecVersion + gateway ID
+                        val version = this.EdgeSecVersion.encodeToByteArray()
+                        val gatewayID = this.gatewayID.encodeToByteArray()
+                        val handshakeHelloMessage: ByteArray = version + gatewayID
+
+                        print("Sending handshake: " + handshakeHelloMessage.decodeByteArrayToHexString())
+
+                        //Send HandshakeHello message
+                        this.transportPlugin!!.sendHandshakeHello(deviceID, handshakeHelloMessage)
+                            .subscribe(
+                                {
+                                    if (!it)
+                                        emitter.onError(Exception("Failed to send handshakeHello"))
+                                    else {
+                                        print("Handshake sent")
+
+                                        // Invoke TransportPlugin to read message from device with following content:
+                                        // - ID do objeto
+
+                                        // Read HandshakeHello response
+                                        this.transportPlugin!!.readHandshakeResponse(deviceID)
+                                            .subscribe(
+                                                { it ->
+                                                    val handshakeResponse = it
+                                                    var lastIndexRead = 0
+
+                                                    // Get Device Authentication ID
+                                                    val objectID: String =
+                                                        handshakeResponse!!.slice(
+                                                            IntRange(
+                                                                lastIndexRead,
+                                                                lastIndexRead + Constants.DEVICE_ID_BYTES_SIZE - 1
+                                                            )
+                                                        ).toByteArray().decodeToString()
+                                                    lastIndexRead += Constants.DEVICE_ID_BYTES_SIZE
+
+                                                    print("objectID: " + objectID)
+                                                    emitter.onSuccess(objectID)
+                                                },
+                                                { emitter.onError(Exception("Failed to read handshakeHelloResponse: " + it.message)) }
+                                            )
+                                    }
+                                },
+                                { emitter.onError(Exception("Failed to send handshakeHello: " + it.message)) }
+                            )
                     }
 
-                    print("Starting handshake")
-
-                    // TODO: Review verifyCompatibility
-                    // Use transport plugin to verify if device is compatible with EdgeSec
-//        if (!this.transportPlugin!!.verifyDeviceCompatibility(deviceID))
-//            throw Exception("Device is not compatible with EdgeSec");
-
-                    // Build HandshakeHello message with EdgeSecVersion + gateway ID
-                    val version = this.EdgeSecVersion.encodeToByteArray()
-                    val gatewayID = this.gatewayID.encodeToByteArray()
-                    val handshakeHelloMessage: ByteArray = version + gatewayID
-
-                    print("Sending handshake: " + handshakeHelloMessage.decodeByteArrayToHexString())
-
-                    //Send HandshakeHello message
-                    this.transportPlugin!!.sendHandshakeHello(deviceID, handshakeHelloMessage)
-                        .subscribe(
-                            {
-                                if (!it)
-                                    throw Exception("Failed to send handshakeHello")
-                                print("Handshake sent")
-
-                                // Invoke TransportPlugin to read message from device with following content:
-                                // - ID do objeto
-
-                                // Read HandshakeHello response
-                                this.transportPlugin!!.readHandshakeResponse(deviceID).subscribe(
-                                    { it ->
-                                        if (it == null)
-                                            throw Exception("Failed to read handshakeHelloResponse")
-
-                                        val handshakeResponse = it
-                                        var lastIndexRead = 0
-
-                                        // Get Device Authentication ID
-                                        val objectID: String = handshakeResponse!!.slice(
-                                            IntRange(
-                                                lastIndexRead,
-                                                lastIndexRead + Constants.DEVICE_ID_BYTES_SIZE - 1
-                                            )
-                                        ).toByteArray().decodeToString()
-                                        lastIndexRead += Constants.DEVICE_ID_BYTES_SIZE
-
-                                        print("objectID: " + objectID)
-                                        emitter.onSuccess(objectID)
-                                    },
-                                    { emitter.onError(it) }
-                                )
-                            },
-                            { emitter.onError(it) }
-                        )
-
-                }, { emitter.onError(it) }
+                }, { emitter.onError(Exception("Failed to connect to device: " + it.message)) }
             )
         }
     }
@@ -360,15 +378,16 @@ class EdgeSec() : IEdgeSec {
         return Single.create { emitter ->
             transportPlugin!!.sendHelloMessage(deviceID, helloMessage).subscribe({
                 if (!it)
-                    throw Exception("Failed to send helloMessage")
-
-                // Invoke TransportPlugin to read HelloMessage response
-                transportPlugin!!.readHelloMessageResponse(deviceID).subscribe({
-                    if (it != null) {
-                        emitter.onSuccess(it)
-                    }
-                    throw Exception("Failed to read helloMessageResponse")
-                }, { emitter.onError(it) })
+                    emitter.onError(Exception("Failed to send helloMessage"))
+                else {
+                    // Invoke TransportPlugin to read HelloMessage response
+                    transportPlugin!!.readHelloMessageResponse(deviceID).subscribe({
+                        if (it != null) {
+                            emitter.onSuccess(it)
+                        }
+                        emitter.onError(Exception("Failed to read helloMessageResponse"))
+                    }, { emitter.onError(it) })
+                }
             }, { emitter.onError(it) })
         }
     }
