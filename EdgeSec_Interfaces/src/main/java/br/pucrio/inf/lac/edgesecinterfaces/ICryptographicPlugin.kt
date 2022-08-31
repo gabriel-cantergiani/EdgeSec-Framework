@@ -1,63 +1,69 @@
 /*
 Module: ICryptographicPlugin.kt
-Description: Interface for plugin that provides a cryptography implementation, compatible with EdgeSec framework
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesecinterfaces
 
 import java.security.Key
 
+/*
+Interface: ICryptographicPlugin
+Description: Interface for plugin that provides a cryptography implementation, compatible with EdgeSec framework
+ */
 interface ICryptographicPlugin {
 
     /*
-        Retorna o identificador do protocolo immplementado pelo plugin. Este identificador é utilizado durante o processo de handshake para avaliar a compatibilidade entre gateway e dispositivo.
+        Returns ID of protocol implemented by plugin
+
+        Returns:
+            - String representing protocol
      */
     fun getProtocolID(): String;
 
     /*
-        Gera um token aleatório seguro, utilizando ou não uma semente (usado no OTPChallenge)
+        Generate a random token using protocol implemented by plugin
 
-        Parametros:
-            - size: tamanho (em quantidade de bytes) do token aleatório a ser gerado
+        Parameters:
+            - size: Integer defining size of token to be generated in bytes
 
-        Retorno:
-            - array de bytes com o valor aleatório
+        Returns:
+            - ByteArray representing secure random token generated
      */
     fun generateSecureRandomToken(size: Int): ByteArray;
 
     /*
-        Gera uma chave criptográfica a ser usada nos processos de autenticação e de criptografia dos dados trocados (usado na Ksession)
+        Generate a secret key
 
-        Parametros:
-            - seed: string que será a semente da geração do valor aleatório
+        Parameters:
+            - seed: ByteArray to be used as seed to generate key
 
-        Retorno:
-            - array de bytes da chave criptográfica
+        Returns:
+            - Key object generated
      */
     fun generateSecretKey(seed: ByteArray): Key;
 
 
     /*
-        Criptografa dados
+        Encrypt data using a provided key
 
-        Parametros:
-            - plainText: array de bytes contendo o valor a ser criptografado em texto plano
-            - key: chave a ser utilizada para criptografar
+        Parameters:
+            - plainText: ByteArray representing data to be encrypted
+            - key: ByteArray representing key value to be used in encryption
 
-        Retorno:
-            - array de bytes com o resultado criptografado
+        Returns:
+            - ByteArray representing encrypted data
      */
     fun encrypt(plainText: ByteArray, key: ByteArray): ByteArray;
 
     /*
-        Decripta dados
+        Decrypt data using a provided key
 
-        Parametros:
-            - cipher: array de bytes contendo o valor criptografado a ser decriptado
-            - key: chave a ser utilizada para decriptar
+        Parameters:
+            - cipher: ByteArray representing encrypted data
+            - key: ByteArray representing key value to be used in decryption
 
-        Retorno:
-            - array de bytes com o resultado em texto plano
+        Returns:
+            - ByteArray representing decrypted data
      */
     fun decrypt(cipher: ByteArray, key: ByteArray): ByteArray;
 }

@@ -1,6 +1,5 @@
 /*
 Module: EdgeSec.kt
-Description: Main module for EdgeSec framework - implements IEdgeSec interface
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesec
@@ -14,6 +13,11 @@ import io.reactivex.Observable
 import io.reactivex.Single
 import java.util.*
 
+/*
+Class: EdgeSec
+Description: Main class for EdgeSec framework.
+Implements IEdgeSec interface and provides all functionalities to establish a secure connectio and exchange of data
+ */
 class EdgeSec() : IEdgeSec {
 
     private val TAG = "EdgeSec"
@@ -35,6 +39,16 @@ class EdgeSec() : IEdgeSec {
         System.out.println("[EDGESEC-DEBUG-$TAG] " + s)
     }
 
+    /*
+       Set up EdgeSec framework initializing main variables
+
+       Parameters:
+           - gatewayID: string identifying MacAddress of gateway
+           - transportPlugin: Object that implements ITransportPlugin interface
+           - cryptoPlugin: Array of objects that implements ICryptographicPlugin interface
+           - authPlugin: Array of objects that implements IAuthenticationPlugin interface
+
+    */
     override fun initialize(
         gatewayID: String,
         transportPlugin: ITransportPlugin,
@@ -60,6 +74,12 @@ class EdgeSec() : IEdgeSec {
         this.secureConnections = mutableMapOf<String, SecureConnection>()
     }
 
+    /*
+        Search for devices nearby that are compatible with EdgeSec using transport protocol
+
+        Returns:
+             - Observable that emits strings representing the MacAddress of devices that are found
+     */
     override fun searchDevices(): Observable<String> {
 
         // Check if transport plugin is set
@@ -69,6 +89,15 @@ class EdgeSec() : IEdgeSec {
         return this.transportPlugin!!.scanForCompatibleDevices()
     }
 
+    /*
+    Tries to connect with device, perform handshake and start authentication process. If succeeded, device will be connected securely.
+
+    Parameters:
+        - deviceID: String identifying MacAddress of device to connect
+
+    Returns:
+        - Observable that emits true if connection was succeeded and false otherwise
+     */
     @Suppress("CheckResult")
     override fun secureConnect(deviceID: String): Single<Boolean> {
 
@@ -83,7 +112,7 @@ class EdgeSec() : IEdgeSec {
             this.connectAndHandshake(deviceID).subscribe({
                 val objectID = it
 
-                // Chama classe de Authorization para verificar se dispositivo pode se comunicar com o gateway
+                // Invoke Authorization class to verify if connection is allowed
                 val authorizationResponse =
                     this.authorization?.verifyAuthorization(this.gatewayID, objectID)
                         ?: throw Exception("Failed to get authorization from Core")
@@ -107,16 +136,16 @@ class EdgeSec() : IEdgeSec {
                 if (selectedAuthPlugin == null || selectedCryptoPlugin == null)
                     throw Exception("Plugins not compatible")
 
-                // Chama função createHelloMessage para obter a Hello Message pronta
+                // Get helloMessage
                 val signedHelloMessage = createHelloMessage(authenticationPackage)
                 print("HelloMessage: " + signedHelloMessage.decodeByteArrayToHexString())
 
-                // Chama função exchangeHelloMessage para enviar e receber resposta da Hello Message
+                // Send Hello Message
                 exchangeHelloMessage(deviceID, signedHelloMessage).subscribe({
                     val helloMessageResponse = it
                     print("HelloMessageResponse: " + helloMessageResponse!!.decodeByteArrayToHexString())
 
-                    // Chama classe AuthenticationPlugin para verificar assinatura da resposta da Hello Message
+                    // Invoke AuthenticatioPlugin to verify HelloMessageResponse
                     val success =
                         verifyHelloMessageResponse(
                             objectID,
@@ -128,7 +157,7 @@ class EdgeSec() : IEdgeSec {
                     }
                     print("HelloMessageResponse validated successfully")
 
-                    // Cria classe SecureConnection para dispositivo e adiciona na lista de autenticados e conectados, e retorna
+                    // Create SecureConnection class and add it to cache
                     val newSecureConnection =
                         SecureConnection(
                             objectID,
@@ -145,13 +174,22 @@ class EdgeSec() : IEdgeSec {
         }
     }
 
+    /*
+    Reads data securely from connected and authenticated device
+
+    Parameters:
+        - deviceID: String identifying MacAddress of device to connect
+
+    Returns:
+        - Observable that emits a ByteArray with the data read
+     */
     @Suppress("CheckResult")
     override fun secureRead(deviceID: String): Single<ByteArray> {
 
-        // Verifica se dispositivo está na lista de conectados e autenticados
+        // Verify if device is connected and authenticated
         val secureConnection = secureConnections?.get(deviceID) ?: return Single.just(null)
 
-        // Chama classe TransportPlugin para ler dado do dispositivo
+        // Invoke TransportPlugin to read data from device
         return Single.create { emitter ->
             transportPlugin!!.readData(deviceID).subscribe({
                 if (it == null) {
@@ -165,38 +203,57 @@ class EdgeSec() : IEdgeSec {
                 val signingKey = selectedCryptoPlugin!!.generateSecretKey(secureConnection.otp)
 
 
-                // Chama classe AuthenticationPlugin para verificar assinatura da mensagem
+                // Invoke AuthenticationPlugin to verify message signature
                 if (!selectedAuthPlugin!!.verifySignature(encryptedData, signingKey, signature)) {
                     emitter.onError(Exception("Failed to validate message signature"))
                 }
 
-                // Chama classe CryptographyPlugin para decriptar mensagem
+                // Invoke CryptographyPlugin to decrypt message
                 val decryptedData =
                     selectedCryptoPlugin!!.decrypt(encryptedData, secureConnection.sessionKey)
 
-                // Responde com valor da mensagem
+                // Emit message value
                 emitter.onSuccess(decryptedData)
             }, { emitter.onError(it) })
         }
     }
 
+    /*
+    Writes data securely to connected and authenticated device
+
+    Parameters:
+        - deviceID: String identifying MacAddress of device to connect
+
+    Returns:
+        - Observable that emits true if write was succeeded and false otherwise
+     */
     override fun secureWrite(deviceID: String, data: ByteArray): Single<Boolean> {
 
-        // Verifica se dispositivo está na lista de conectados e autenticados
+        // Verify if device is connected and authenticated
         val secureConnection = secureConnections?.get(deviceID) ?: return Single.just(false)
 
-        // Chama classe CryptographyPlugin para encriptar mensagem
+        // Invoke CryptographyPlugin to encrypt message
         val encryptedData = selectedCryptoPlugin!!.encrypt(data, secureConnection.sessionKey)
 
-        // Chama classe AuthenticationPlugin para assinar a mensagem
+        // Invoke AuthenticationPlugin to sign message
         val signingKey = selectedCryptoPlugin!!.generateSecretKey(secureConnection.otp)
         val signature = selectedAuthPlugin!!.sign(encryptedData, signingKey)
 
         val message = encryptedData + signature
-        // Chama classe TransportPlugin para enviar dado ao dispositivo
+        // Invoke TransportPlugin to send message
         return transportPlugin!!.writeData(deviceID, message)
     }
 
+
+    /*
+    Auxiliary function that connects and exchange handshake messages with device
+
+    Parameters:
+        - deviceID: String identifying MacAddress of device to connect
+
+    Returns:
+        - Observable that emits a string identifying the authentication ID of the Smart Object
+     */
     @Suppress("CheckResult")
     private fun connectAndHandshake(deviceID: String): Single<String> {
 
@@ -230,7 +287,7 @@ class EdgeSec() : IEdgeSec {
                                     throw Exception("Failed to send handshakeHello")
                                 print("Handshake sent")
 
-                                // Chama classe de TransportPlugin para ler mensagem do dispositivo com:
+                                // Invoke TransportPlugin to read message from device with following content:
                                 // - ID do objeto
 
                                 // Read HandshakeHello response
@@ -265,29 +322,47 @@ class EdgeSec() : IEdgeSec {
         }
     }
 
+    /*
+    Auxiliary function that builds hello message
+
+    Parameters:
+        - authenticationPackage: AuthenticationPackage object
+
+    Returns:
+        - ByteArray with helloMessage as content
+     */
     private fun createHelloMessage(authenticationPackage: AuthenticationPackage): ByteArray {
 
-        // Chama função para gerar Hello Message utilizando pacote de autenticação e timestamp
         val helloMessage =
             authenticationPackage.signedAuthPackage + authenticationPackage.messageTimestamp
 
-        // Chama classe AuthenticationPlugin para assinar Hello Message
         val key = selectedCryptoPlugin!!.generateSecretKey(authenticationPackage.OTP)
 
         return selectedAuthPlugin!!.sign(helloMessage, key)
     }
 
+    /*
+    Auxiliary function that exchange hello message with device
+
+    Parameters:
+        - deviceID: String identifying MacAddress of device
+        - helloMessage: ByteArray with hello message as content
+
+    Returns:
+        - Observable that emits a ByteArray with the helloMessageResponse as content
+     */
+    @Suppress("CheckResult")
     private fun exchangeHelloMessage(
         deviceID: String,
         helloMessage: ByteArray
     ): Single<ByteArray?> {
-        // Chama classe de TransportPlugin para enviar a mensagem autenticada
+        // Invoke TransportPlugin to send hellomessage
         return Single.create { emitter ->
             transportPlugin!!.sendHelloMessage(deviceID, helloMessage).subscribe({
                 if (!it)
                     throw Exception("Failed to send helloMessage")
 
-                // Chama classe de TransportPlugin para ler resposta da Hello Message
+                // Invoke TransportPlugin to read HelloMessage response
                 transportPlugin!!.readHelloMessageResponse(deviceID).subscribe({
                     if (it != null) {
                         emitter.onSuccess(it)
@@ -298,6 +373,17 @@ class EdgeSec() : IEdgeSec {
         }
     }
 
+    /*
+    Auxiliary function verify signature of hello message response
+
+    Parameters:
+        - objectID: String identifying authentication ID of smart object
+        - authenticationPackage: AuthenticationPackage object
+        - responseToBeVerified: ByteArray with the helloMessageResponse
+
+    Returns:
+        - true in case response is valid, false otherwise
+     */
     private fun verifyHelloMessageResponse(
         objectID: String,
         authenticationPackage: AuthenticationPackage,
@@ -314,6 +400,18 @@ class EdgeSec() : IEdgeSec {
         return selectedAuthPlugin!!.verifySignature(responseContent, key, responseToBeVerified)
     }
 
+    /*
+    Auxiliary function builds authentication package object
+
+    Parameters:
+        - protocolSuite: String identifying protocol suite
+        - signedAuthPackage: ByteArray representing signed authentication package
+        - OTP: ByteArray representing One Time Password
+        - sessionKey: ByteArray representing session key
+
+    Returns:
+        - Authentication Package Object
+     */
     private fun buildAuthenticationPackage(
         protocolSuite: String,
         signedAuthPackage: ByteArray,
@@ -321,15 +419,19 @@ class EdgeSec() : IEdgeSec {
         sessionKey: ByteArray
     ): AuthenticationPackage {
         // Generate timestamp
-//        val timestamp = (System.currentTimeMillis() / 1000).toInt().encodeToByteArray()
-        // TODO": MOCKED TIMESTAMP GENERATION FOR TESTING
-        val timestamp = (91823 / 1000).toInt().encodeToByteArray()
-        // MOCKED
+        val timestamp = (System.currentTimeMillis() / 1000).toInt().encodeToByteArray()
 
         return AuthenticationPackage(protocolSuite, signedAuthPackage, OTP, sessionKey, timestamp)
 
     }
 
+    /*
+    Auxiliary function that parse protocol suite string and set the selected plugins
+
+    Parameters:
+        - protocolSuite: String identifying protocol suite
+
+     */
     private fun setPlugins(protocolSuite: String) {
         val cryptoProtocol = protocolSuite.split("_")[0]
         val authProtocol = protocolSuite.split("_")[1] + "_" + protocolSuite.split("_")[2]
@@ -349,53 +451,4 @@ class EdgeSec() : IEdgeSec {
             }
         }
     }
-
-
-/*
-PROCESSO DE NEGOCIACAO DE PROTOCOLOS (na funcao de handshake)
-// Chama classe de TransportPlugin para ler mensagem do dispositivo com:
-    // - ID do dispositivo
-    // - Tamanho em bytes da lista de protocolos auth
-    // - Lista de protocolos de autenticacao disponiveis (codigos)
-    // - Tamanho em bytes da lista de protocolos crypto
-    // - Lista de protocolos de criptografia disponiveis (codigos)
-
-// Get Auth protocol list size
-    val sizeOfAuthList: Int = handshakeResponse.slice(IntRange(lastIndexRead, lastIndexRead + Constants.PROTOCOL_LIST_LENGTH_BYTES_SIZE)).toByteArray().decodeToInt();
-    lastIndexRead += Constants.PROTOCOL_LIST_LENGTH_BYTES_SIZE;
-
-    print("size of auth list: " + sizeOfAuthList)
-    var authProtocolsList = ArrayList<Int>();
-    for(i in 0 until sizeOfAuthList / Constants.PROTOCOL_ID_BYTES_SIZE) {
-        var startIndex = lastIndexRead + (i*Constants.PROTOCOL_ID_BYTES_SIZE)
-        print("startIndex: " + startIndex)
-        print("sliced int: " + handshakeResponse.slice(IntRange(startIndex, startIndex + Constants.PROTOCOL_ID_BYTES_SIZE)).toByteArray())
-        authProtocolsList.add(handshakeResponse.slice(IntRange(startIndex, startIndex + Constants.PROTOCOL_ID_BYTES_SIZE)).toByteArray().decodeToInt());
-        print("protocol list: " + authProtocolsList)
-    }
-    lastIndexRead += Constants.PROTOCOL_ID_BYTES_SIZE * sizeOfAuthList;
-
-
-    // Get Crypto Protocol list
-    val sizeOfCryptoList: Int = handshakeResponse.slice(IntRange(lastIndexRead, lastIndexRead + Constants.PROTOCOL_LIST_LENGTH_BYTES_SIZE)).toByteArray().decodeToInt();
-    lastIndexRead += Constants.PROTOCOL_LIST_LENGTH_BYTES_SIZE;
-
-    var cryptoProtocolsList = ArrayList<Int>();
-    for(i in 0 until sizeOfCryptoList / Constants.PROTOCOL_ID_BYTES_SIZE) {
-        var startIndex = lastIndexRead + (i*Constants.PROTOCOL_ID_BYTES_SIZE)
-        cryptoProtocolsList.add(handshakeResponse.slice(IntRange(startIndex, Constants.PROTOCOL_ID_BYTES_SIZE)).toByteArray().decodeToInt());
-    }
-
-    print("Device Auth ID: " + deviceAuthenticationID)
-    print("Size of auth list: " + sizeOfAuthList)
-    print("Auth List: " + authProtocolsList)
-    print("Size of crypto list: " + sizeOfCryptoList)
-    print("Crypto List: " + cryptoProtocolsList)
-
-    // Percorre as listas selecionando os protocolos a serem utilizados, sempre buscando por protocolos preferenciais. Se nao achar nenhum protocolo compativel, desconecta
-
-    // Chama classe de TransportPlugin para enviar mensagem para o dispositivo com:
-    // - Protocolo de autenticacao selecionado
-    // - Protocolo de criptografia selecionado
- */
 }

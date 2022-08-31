@@ -1,16 +1,15 @@
 /*
 Module: SecurityUtils.kt
-Description: Utility functions
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesec
 
 
+/*
+Class: SecurityUtils
+Description: Utility functions
+ */
 class SecurityUtils {
-    // Implementa algumas funções auxiliares ao processo de autenticação como:
-    // Concatenação de valores em bytes
-    // Criação de timestamp, incremento de timestamp
-    // Conversão de bytes para hex string e vice-versa
 
     private val TAG = "SecurityUtils"
 
@@ -18,14 +17,6 @@ class SecurityUtils {
     }
 
     companion object {
-//        fun String.encodeToByteArray(): ByteArray {
-//
-//            check(length % 2 == 0) { "Must have an even length" }
-//
-//            return chunked(2)
-//                .map { it.toInt(16).toByte() }
-//                .toByteArray()
-//        }
 
         fun ByteArray.decodeByteArrayToHexString(): String {
 

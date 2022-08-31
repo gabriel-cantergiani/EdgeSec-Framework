@@ -1,6 +1,5 @@
 /*
 Module: ITransportPlugin.kt
-Description: Interface for plugin that provides a transportation protocol implementation, compatible with EdgeSec framework
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesecinterfaces
@@ -9,126 +8,120 @@ import io.reactivex.Observable
 import io.reactivex.Single
 import java.util.*
 
+/*
+Interface: ITransportPlugin
+Description: Interface for plugin that provides a transportation protocol implementation, compatible with EdgeSec framework
+ */
 interface ITransportPlugin {
 
     /*
-        Escaneia por dispositivos compatíveis com o protocolo de transporte nas redondezas.
+        Scan for nearby compatible devices using the BLE transport protocol
 
-        ??? Possíveis parametros de distancia limite ou tempo limite ???
-
-        Retorno:
-            - lista de IDs de dispositivos encontrados
+        Returns:
+            - Observable that emits the MacAddress of devices that are found
      */
     fun scanForCompatibleDevices(): Observable<String>;
 
     /*
-       Se conecta com o dispositivo através do protocolo de transporte
+       Tries to connect with a device using BLE protocol
 
-       Parametros:
-           - device_id: string identificadora do dispositivo
+       Parameters:
+           - device_id: string identifying MacAddress of device
 
-       Retorno:
-           - true em caso de conectado com sucesso, false caso contrário
+       Returns:
+           - Observable that emits true if connection was successful, false otherwise
     */
     fun connect(deviceID: String): Single<Boolean>;
 
     /*
-        Verifica se o dispositivo é compatível com a arquitetura EdgeSec.
+        Verifies if device is compatible with EdgeSec architecture
 
-        Parametros:
-            - device_id: string identificadora do dispositivo
+        Parameters:
+            - device_id: string identifying MacAddress of device
 
-        Retorno:
-            - true em caso de compatível, false em caso de não compatível
+        Returns:
+            - Observable that emits true if it is successful, and false otherwise
      */
     fun verifyDeviceCompatibility(deviceID: String): Single<Boolean>;
 
     /*
-        Envia mensagem de hello do processo de handshake
+       Sends the handshakeHelloMessage to device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
-            - data: array de bytes com os dados a serem escritos
+       Parameters:
+           - device_id: string identifying MacAddress of device
+           - data: ByteArray with data to be sent
 
-        Retorno:
-            - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
-     */
+       Returns:
+           - Observable that emits true if it is successful, false otherwise
+    */
     fun sendHandshakeHello(deviceID: String, data: ByteArray): Single<Boolean>;
 
     /*
-        Faz a leitura da resposta do processo do handshake Hello. Depedendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
+        Reads the handshakeResponse from device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
+        Parameters:
+            - device_id: string identifying MacAddress of device
 
-        ** (plugin deve decidir se dá para ler em uma só mensagem ou é necessário quebrar mensagem em várias partes)
-
-        Retorno:
-            - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
+        Returns:
+            - Observable that emits a ByteArray containing the data that was read in case of success, and null in case of error.
      */
     fun readHandshakeResponse(deviceID: String): Single<ByteArray?>;
 
     /*
-        Envia mensagem de de término do handshake
+        Send handshakeFinish message to device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
-            - data: array de bytes com os dados a serem escritos
+        Parameters:
+            - device_id: string identifying MacAddress of device
+            - data: ByteArray with data to be sent
 
-        Retorno:
-            - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
+        Returns:
+            - Observable that emits true in case of successful write, and false otherwise.
      */
     fun sendHandshakeFinished(deviceID: String, data: ByteArray): Single<Boolean>;
 
     /*
-        Envia hello message do processo de autenticação
+        Sends hello message to device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
-            - data: array de bytes com os dados a serem escritos
+        Parameters:
+            - device_id: string identifying MacAddress of device
+            - data: ByteArray with data to be sent
 
-        Retorno:
-            - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
+        Returns:
+            - Observable that emits true in case of successful write, and false otherwise.
      */
     fun sendHelloMessage(deviceID: String, data: ByteArray): Single<Boolean>;
 
     /*
-        Faz a leitura da resposta dda hello message. Depedendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
+        Reads the HelloMessageResponse
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
+        Parameters:
+            - device_id: string identifying MacAddress of device
 
-        ** (plugin deve decidir se dá para ler em uma só mensagem ou é necessário quebrar mensagem em várias partes)
-
-        Retorno:
-            - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
+        Returns:
+            - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
     fun readHelloMessageResponse(deviceID: String): Single<ByteArray?>;
 
     /*
-        Faz a leitura de um dado do dispositivo. Depedendo do protocolo, esta leitura pode ser ativa (ação iniciada pelo gateway) ou passiva (gateway espera por mensagem/ação do dispositivo).
+        Reads data from device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
+        Parameters:
+            - device_id: string identifying MacAddress of device
 
-        ** (plugin deve decidir se dá para ler em uma só mensagem ou é necessário quebrar mensagem em várias partes)
-
-        Retorno:
-            - Array de bytes contendo o dado lido, caso a leitura tenha sido bem sucedida. Em caso de falha, ou sem dado para ler, retorna nulo.
+        Returns:
+            - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
     fun readData(deviceID: String): Single<ByteArray?>;
 
     /*
-        Faz a escrita de um dado no dispositivo.
+        Writes data to device
 
-        Parametros:
-            - device_id: string identificadora do dispositivo (obtida pelo protocolo de transporte)
-            - data: array de bytes com os dados a serem escritos
+        Parameters:
+            - device_id: string identifying MacAddress of device
+            - data: ByteArray with data to be sent
 
-        ** (plugin deve decidir se dá para enviar em uma só mensagem ou é necessário quebrar mensagem em várias partes)
-
-        Retorno:
-            - true caso a escrita tenha sido bem sucedida. Em caso de falha retorna false.
+        Returns:
+            - Observable that emits true if write is successful, and false otherwise.
      */
     fun writeData(deviceID: String, data: ByteArray): Single<Boolean>;
 

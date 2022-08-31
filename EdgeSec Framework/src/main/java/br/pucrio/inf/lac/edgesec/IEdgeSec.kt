@@ -14,59 +14,57 @@ import io.reactivex.Single
 interface IEdgeSec {
 
     /*
-    Inicializa framework configurando o identificador do gateway e os plugins que serão utilizados na comunicação.
+       Set up EdgeSec framework initializing main variables and plugins
 
-    Parametros:
-        - gateway_id: string identificadora do gateway
-        - transportPlugin: objeto que implementa interface do plugin de transporte
-        - criptoPlugins: lista de objetos que implementam interface do plugin de criptografia
-        - authPlugins: lista de objetos que implementam interface do plugin de autenticação
-     */
+       Parameters:
+           - gatewayID: string identifying MacAddress of gateway
+           - transportPlugin: Object that implements ITransportPlugin interface
+           - cryptoPlugin: Array of objects that implements ICryptographicPlugin interface
+           - authPlugin: Array of objects that implements IAuthenticationPlugin interface
+
+    */
     fun initialize(gatewayID: String, transportPlugin: ITransportPlugin, cryptoPlugins: ArrayList<ICryptographicPlugin>, authPlugins: ArrayList<IAuthenticationPlugin>);
 
 
     /*
-    Utiliza o protocolo de transporte configurado pelo plugin para buscar dispositivos nas redondezas.
+        Search for devices nearby that are compatible with EdgeSec using transport protocol
 
-    Retorno:
-        - lista de IDs dos dispositivos compatíveis encontrados.
+        Returns:
+             - Observable that emits strings representing the MacAddress of devices that are found
      */
     fun searchDevices(): Observable<String>;
 
 
     /*
-    Se conecta com dispositivo, realiza o handshake e inicia processo de autenticação. Se bem sucedido, o dispositivo estará conectado e autenticado e poderá trocar dados de forma segura.
+    Tries to connect with device, perform handshake and start authentication process. If succeeded, device will be connected securely.
 
-    Parametros:
-        - device_id: Identificador do dispositivo com quem o gateway deseja se autenticar
+    Parameters:
+        - deviceID: String identifying MacAddress of device to connect
 
-    Retorno:
-        - true: em case de sucesso
-        - false: em caso de falha
+    Returns:
+        - Observable that emits true if connection was succeeded and false otherwise
      */
     fun secureConnect(deviceID: String): Single<Boolean>;
 
     /*
-    Faz a leitura de dados de um dispositivo conectado e autenticado.
+    Reads data securely from connected and authenticated device
 
-    Parametros:
-        - device_id: Identificador do dispositivo do qual o gateway deseja ler dados
+    Parameters:
+        - deviceID: String identifying MacAddress of device to connect
 
-    Retorno:
-        - array de bytes representando os dados lidos. Array vazio em caso de falhar para ler os dados, ou caso dispositivo não exista ou não esteja autenticado.
+    Returns:
+        - Observable that emits a ByteArray with the data read
      */
     fun secureRead(deviceID: String): Single<ByteArray>;
 
     /*
-    Faz a escrita de dados em um dispositivo conectado e autenticado.
+    Writes data securely to connected and authenticated device
 
-    Parametros:
-        - device_id: Identificador do dispositivo do qual o gateway deseja ler dados
-        - data: array de bytes representando os dados que se deseja escrever para o dispositivo
+    Parameters:
+        - deviceID: String identifying MacAddress of device to connect
 
-    Retorno:
-        - true: em case de sucesso
-        - false: em caso de falha
+    Returns:
+        - Observable that emits true if write was succeeded and false otherwise
      */
     fun secureWrite(deviceID: String, data: ByteArray): Single<Boolean>;
 }

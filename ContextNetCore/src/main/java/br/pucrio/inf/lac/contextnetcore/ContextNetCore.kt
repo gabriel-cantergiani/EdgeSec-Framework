@@ -1,6 +1,5 @@
 /*
 Module: ContextNetCore.kt
-Description: Module that simulates actions executed in processing servers on ContextNetCore
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.contextnetcore
@@ -11,8 +10,11 @@ import br.pucrio.inf.lac.hmacmd5authentication.HmacMD5
 import br.pucrio.inf.lac.rc4cryptography.RC4
 import com.google.gson.Gson
 
+/*
+Object: ContextNetCore
+Description: Module that simulates actions executed in processing servers on ContextNetCore
+ */
 object ContextNetCore {
-    // Mocks the functionalities of the ContextNetCore servers
 
     private val coreAuthKey = "Kauth_core".encodeToByteArray();
 
@@ -45,6 +47,18 @@ object ContextNetCore {
         "HMAC_MD5" to HmacMD5(),
     )
 
+    /*
+       Receives a pair of gateway/object and verifies if they are allowed to securely communicate with each other
+
+       Parameters:
+           - gateway_id: string identifying MacAddress of gateway
+           - object_id: string identifying MacAddress of smart object
+
+       Returns:
+           - A pair of values:
+                - A boolean that has value true if devices are authorized, and false otherwise
+                - A String representing the serialized JSON of the Authorization Response
+    */
     fun authorize(gatewayID: String, objectID: String): Pair<Boolean, String> {
 
         // Validate if object is registered
@@ -80,6 +94,15 @@ object ContextNetCore {
         return Pair(true, gson.toJson(response))
     }
 
+    /*
+       Auxiliary function the checks the supported protocol suites of a device and select a preferred one
+
+       Parameters:
+           - object_id: string identifying MacAddress of smart object
+
+       Returns:
+           - A string representing the selected protocol suite
+    */
     private fun selectProtocolSuite(objectID: String): String? {
         val listOfSupportedProtocolSuites = objectsSupportedProtocolSuites[objectID]
 
@@ -95,17 +118,48 @@ object ContextNetCore {
         return null;
     }
 
+    /*
+       Auxiliary function that parses the protocol suite string and retrieves the implementation of the cryptographic protocol
+
+       Parameters:
+           - protocolSuite: string representing the protocol suite
+
+       Returns:
+           - An object that implements the ICryptographicPlugin interface with the selected protocol
+    */
     private fun getCryptoPlugin(protocolSuite: String): ICryptographicPlugin? {
         val cryptoProtocol = protocolSuite.split("_")[0]
         return cryptoPlugins[cryptoProtocol]
     }
 
+    /*
+       Auxiliary function that parses the protocol suite string and retrieves the implementation of the authentication protocol
+
+       Parameters:
+           - protocolSuite: string representing the protocol suite
+
+       Returns:
+           - An object that implements the IAuthenticationPlugin interface with the selected protocol
+    */
     private fun getAuthPlugin(protocolSuite: String): IAuthenticationPlugin? {
         val authProtocol = protocolSuite.split("_")[1] + "_" + protocolSuite.split("_")[2]
 
         return authPlugins[authProtocol]
     }
 
+    /*
+       Auxiliary function that builds the authentication package object
+
+       Parameters:
+            - cipherKey: ByteArray representing the encrypting key
+            - otp: ByteArray representing the generated OTP value
+            - sessionKey: ByteArray representing the generated session key value
+            - cryptoPlugin: object that implements ICryptographicPlugin interface
+            - authPlugin: object that implements IAuthenticationPlugin interface
+
+       Returns:
+           - ByteArray that consists of the encrypted authentication package and its signature (HMAC)
+    */
     private fun generateAuthPackage(
         cipherKey: ByteArray,
         otp: ByteArray,
@@ -122,12 +176,35 @@ object ContextNetCore {
         return encryptedAuthPackage + authPackageSignature
     }
 
+    /*
+       Auxiliary function that generates a session key
+
+       Parameters:
+            - size: Integer that defines the size of the key
+            - cryptoPlugin: object that implements ICryptographicPlugin interface
+
+       Returns:
+           - ByteArray that consists of the generated sessionKey
+    */
     private fun generateSessionKey(size: Int, cryptoPlugin: ICryptographicPlugin): ByteArray {
         val seed = cryptoPlugin.generateSecureRandomToken(size)
         val sessionKey = cryptoPlugin.generateSecretKey(seed);
         return sessionKey.encoded;
     }
 
+    /*
+       Auxiliary function that generates a One Time Password
+
+       Parameters:
+            - object: string identifying MacAddress of smart object
+            - gatewayID: string identifying MacAddress of gateway
+            - otpChallenge: ByteArray representing the generated OTPChallenge value
+            - authPlugin: object that implements IAuthenticationPlugin interface
+
+
+       Returns:
+           - ByteArray that consists of the generated One TIme Password
+    */
     private fun generateOTP(
         objectID: String,
         gatewayID: String,

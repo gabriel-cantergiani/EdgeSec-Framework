@@ -1,10 +1,13 @@
 /*
 Module: Constants.kt
-Description: Constant values used in the package
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesec
 
+/*
+Object: Constants
+Description: Constant values used in the package
+ */
 object Constants {
     const val EDGESEC_VERSION_BYTES_SIZE = 2
     const val GATEWAY_ID_BYTES_SIZE = 17

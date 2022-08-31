@@ -1,10 +1,13 @@
 /*
 Module: Constants.kt
-Description: Constant values used in package
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.contextnetcore
 
+/*
+Object: Constants
+Description: Constant values used in ContextNet Core functionalities
+ */
 object Constants {
 
     val PROTOCOLS_SUITE_ID = mapOf<String, Byte>(
