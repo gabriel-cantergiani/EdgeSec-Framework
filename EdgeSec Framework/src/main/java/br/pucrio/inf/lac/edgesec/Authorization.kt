@@ -6,15 +6,17 @@ package br.pucrio.inf.lac.edgesec
 
 import br.pucrio.inf.lac.contextnetcore.AuthorizationResponse
 import br.pucrio.inf.lac.contextnetcore.ContextNetCore
+import br.pucrio.inf.lac.contextnetcore.IAuthorizationProvider
 import com.google.gson.Gson
 
 /*
 Class: Authorization
 Description: Wrapper for encapsulating communication with authorization server
  */
-class Authorization {
+class Authorization(var authorizationProvider: IAuthorizationProvider) {
 
     private val TAG = "Authorization"
+//    protected var authorizationProvider: IAuthorizationProvider? = null
 
     init {
     }
@@ -32,7 +34,7 @@ class Authorization {
     fun verifyAuthorization(gatewayID: String, objectID: String): AuthorizationResponse? {
 
         // Call ContexNet class to authorize connection (mocked network request)
-        val (success, authorizationResponse) = ContextNetCore.authorize(gatewayID, objectID)
+        val (success, authorizationResponse) = authorizationProvider.authorize(gatewayID, objectID)
 
         if (!success) {
             System.out.println("Authorization error: " + authorizationResponse)

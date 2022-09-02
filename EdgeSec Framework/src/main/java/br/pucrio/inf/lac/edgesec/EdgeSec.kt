@@ -4,6 +4,8 @@ Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesec
 
+import br.pucrio.inf.lac.contextnetcore.ContextNetCore
+import br.pucrio.inf.lac.contextnetcore.IAuthorizationProvider
 import br.pucrio.inf.lac.edgesec.Utils.Companion.decodeByteArrayToHexString
 import br.pucrio.inf.lac.edgesec.Utils.Companion.encodeToByteArray
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
@@ -74,7 +76,7 @@ class EdgeSec() : IEdgeSec {
         this.authPlugins = authPlugins
 
         // Initialize classes and wrappers
-        this.authorization = Authorization()
+        this.authorization = Authorization(ContextNetCore)
 
         // Initialize internal variables
         this.secureConnections = mutableMapOf<String, SecureConnection>()
@@ -172,8 +174,7 @@ class EdgeSec() : IEdgeSec {
                                         authenticationPackage.SessionKey,
                                         authenticationPackage.OTP
                                     )
-                                secureConnections?.put(deviceID, newSecureConnection)
-                                    ?: throw Exception("Error creating secureConnection")
+                                setSecureConnection(deviceID, newSecureConnection)
 
                                 emitter.onSuccess(true)
                             }
@@ -197,7 +198,7 @@ class EdgeSec() : IEdgeSec {
     override fun secureRead(deviceID: String): Single<ByteArray> {
 
         // Verify if device is connected and authenticated
-        val secureConnection = secureConnections?.get(deviceID) ?: return Single.just(null)
+        val secureConnection = secureConnections?.get(deviceID) ?: return Single.create{emitter -> emitter.onError(Exception("Device not connected and authenticated"))}
 
         // Invoke TransportPlugin to read data from device
         return Single.create { emitter ->
@@ -384,11 +385,12 @@ class EdgeSec() : IEdgeSec {
                     transportPlugin!!.readHelloMessageResponse(deviceID).subscribe({
                         if (it != null) {
                             emitter.onSuccess(it)
+                        } else {
+                            emitter.onError(Exception("Failed to read helloMessageResponse"))
                         }
-                        emitter.onError(Exception("Failed to read helloMessageResponse"))
-                    }, { emitter.onError(it) })
+                    }, { emitter.onError(Exception("Failed to read helloMessageResponse: " + it.message))})
                 }
-            }, { emitter.onError(it) })
+            }, { emitter.onError(Exception("Failed to send helloMessage: " + it.message)) })
         }
     }
 
@@ -469,5 +471,13 @@ class EdgeSec() : IEdgeSec {
                 selectedCryptoPlugin = selectedPlugin
             }
         }
+    }
+
+    internal fun setAuthorizationProvider(provider: IAuthorizationProvider) {
+        this.authorization?.authorizationProvider = provider
+    }
+
+    internal fun setSecureConnection(deviceID: String, conn: SecureConnection) {
+        this.secureConnections?.put(deviceID, conn)
     }
 }

@@ -1,10 +1,12 @@
 package br.pucrio.inf.lac.edgesec
 
+import br.pucrio.inf.lac.contextnetcore.AuthorizationResponse
 import br.pucrio.inf.lac.contextnetcore.IAuthorizationProvider
 import org.junit.jupiter.api.Assertions.*
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
 import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
 import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
+import com.google.gson.Gson
 import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.observers.TestObserver
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
+import javax.crypto.spec.SecretKeySpec
 
 internal class EdgeSecTest {
 
@@ -34,7 +37,7 @@ internal class EdgeSecTest {
         }
 
         authPluginMock = mock<IAuthenticationPlugin> {
-            on { getProtocolID() } doReturn "HmacMD5"
+            on { getProtocolID() } doReturn "HMAC_MD5"
         }
 
         cryptoPluginMock = mock<ICryptographicPlugin> {
@@ -114,7 +117,7 @@ internal class EdgeSecTest {
     }
 
     @Test
-    fun secureConnectConnectError() {
+    fun secureConnectConnectionError() {
 
         val subscriber = TestObserver<Boolean>()
         val deviceID = "mockedID"
@@ -131,7 +134,7 @@ internal class EdgeSecTest {
     }
 
     @Test
-    fun secureConnectSendHelloMessageError() {
+    fun secureConnectSendHandshakeHelloError() {
 
         val subscriber = TestObserver<Boolean>()
         val deviceID = "mockedID"
@@ -149,7 +152,7 @@ internal class EdgeSecTest {
     }
 
     @Test
-    fun secureConnectReadHelloMessageResponseError() {
+    fun secureConnectReadHandshakeResponseError() {
 
         val subscriber = TestObserver<Boolean>()
         val deviceID = "mockedID"
@@ -167,31 +170,271 @@ internal class EdgeSecTest {
         subscriber.assertErrorMessage("Failed to read handshakeHelloResponse: Device is not connected and authenticated")
     }
 
-//    @Test
-//    fun secureConnectAuthorizationResponseError() {
-//
-//        val subscriber = TestObserver<Boolean>()
-//        val deviceID = "mockedID"
-//        val response = "01:01:01:01:01:01".encodeToByteArray()
-//
-//        transportPluginMock = mock<ITransportPlugin> {
-//            on { connect(deviceID) } doReturn Single.just(true)
-//            on { sendHandshakeHello(any(), any()) } doReturn Single.just(true)
-//            on { readHandshakeResponse(any()) } doReturn  Single.just(response)
-//        }
-//
-//        val contextNetCoreMock = mock<IAuthorizationProvider>()
-//        whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, "testJSON"))
-//
-//        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
-//        edgeSec.secureConnect(deviceID).subscribe(subscriber)
-//
-//        subscriber.assertError(Exception::class.java)
-//        subscriber.assertErrorMessage("Failed to read handshakeHelloResponse: Device is not connected and authenticated")
-//    }
+    @Test
+    fun secureConnectAuthorizationResponseError() {
+
+        val subscriber = TestObserver<Boolean>()
+        val deviceID = "mockedID"
+        val response = "01:01:01:01:01:01".encodeToByteArray()
+
+        transportPluginMock = mock<ITransportPlugin> {
+            on { connect(deviceID) } doReturn Single.just(true)
+            on { sendHandshakeHello(any(), any()) } doReturn Single.just(true)
+            on { readHandshakeResponse(any()) } doReturn  Single.just(response)
+        }
+
+        val contextNetCoreMock = mock<IAuthorizationProvider>()
+        whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(false, "testJSON"))
+
+        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSec.setAuthorizationProvider(contextNetCoreMock)
+        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+
+        subscriber.assertError(Exception::class.java)
+        subscriber.assertErrorMessage("Failed to get authorization from Core")
+    }
 
     @Test
-    fun secureRead() {
+    fun secureConnectInvalidPluginError() {
+
+        val subscriber = TestObserver<Boolean>()
+        val deviceID = "mockedID"
+        val response = "01:01:01:01:01:01".encodeToByteArray()
+
+        transportPluginMock = mock<ITransportPlugin> {
+            on { connect(deviceID) } doReturn Single.just(true)
+            on { sendHandshakeHello(any(), any()) } doReturn Single.just(true)
+            on { readHandshakeResponse(any()) } doReturn  Single.just(response)
+        }
+
+        val authorizationResponse = AuthorizationResponse(ByteArray(0), ByteArray(0), ByteArray(0), "RANDOM_PROTOCOL_SUITE")
+        val gson = Gson()
+
+
+        val contextNetCoreMock = mock<IAuthorizationProvider>()
+        whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
+
+        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSec.setAuthorizationProvider(contextNetCoreMock)
+        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+
+        subscriber.assertError(Exception::class.java)
+        subscriber.assertErrorMessage("Plugins not supported by smart object")
+    }
+
+    @Test
+    fun secureConnectSendHelloMessageError() {
+
+        val subscriber = TestObserver<Boolean>()
+        val deviceID = "mockedID"
+        val response = "01:01:01:01:01:01".encodeToByteArray()
+
+        transportPluginMock = mock<ITransportPlugin> {
+            on { connect(deviceID) } doReturn Single.just(true)
+            on { sendHandshakeHello(any(), any()) } doReturn Single.just(true)
+            on { readHandshakeResponse(any()) } doReturn  Single.just(response)
+            on { sendHelloMessage(any(), any()) } doReturn  Single.just(false)
+        }
+
+        authPluginMock = mock<IAuthenticationPlugin> {
+            on { getProtocolID() } doReturn "HMAC_MD5"
+            on { sign(any(), any()) } doReturn "signature".encodeToByteArray()
+        }
+
+        cryptoPluginMock = mock<ICryptographicPlugin> {
+            on { getProtocolID() } doReturn "RC4"
+            on { generateSecretKey(any()) } doReturn SecretKeySpec("key".encodeToByteArray(), "RC4")
+        }
+
+        val authorizationResponse = AuthorizationResponse("OTP".encodeToByteArray(), "SESSIONKEY".encodeToByteArray(), "AUTHPACK".encodeToByteArray(), "RC4_HMAC_MD5")
+        val gson = Gson()
+
+        val contextNetCoreMock = mock<IAuthorizationProvider>()
+        whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
+
+        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSec.setAuthorizationProvider(contextNetCoreMock)
+        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+
+        subscriber.assertError(Exception::class.java)
+        subscriber.assertErrorMessage("Failed to send helloMessage")
+    }
+
+    @Test
+    fun secureConnectReadHelloMessageResponseError() {
+
+        val subscriber = TestObserver<Boolean>()
+        val deviceID = "mockedID"
+        val response = "01:01:01:01:01:01".encodeToByteArray()
+
+        transportPluginMock = mock<ITransportPlugin> {
+            on { connect(deviceID) } doReturn Single.just(true)
+            on { sendHandshakeHello(any(), any()) } doReturn Single.just(true)
+            on { readHandshakeResponse(any()) } doReturn  Single.just(response)
+            on { sendHelloMessage(any(), any()) } doReturn  Single.just(true)
+            on { readHelloMessageResponse(any()) } doReturn  Single.create{emitter -> emitter.onError(Exception("Error"))}
+        }
+
+        authPluginMock = mock<IAuthenticationPlugin> {
+            on { getProtocolID() } doReturn "HMAC_MD5"
+            on { sign(any(), any()) } doReturn "signature".encodeToByteArray()
+        }
+
+        cryptoPluginMock = mock<ICryptographicPlugin> {
+            on { getProtocolID() } doReturn "RC4"
+            on { generateSecretKey(any()) } doReturn SecretKeySpec("key".encodeToByteArray(), "RC4")
+        }
+
+        val authorizationResponse = AuthorizationResponse("OTP".encodeToByteArray(), "SESSIONKEY".encodeToByteArray(), "AUTHPACK".encodeToByteArray(), "RC4_HMAC_MD5")
+        val gson = Gson()
+
+        val contextNetCoreMock = mock<IAuthorizationProvider>()
+        whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
+
+        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSec.setAuthorizationProvider(contextNetCoreMock)
+        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+
+        subscriber.assertError(Exception::class.java)
+        subscriber.assertErrorMessage("Failed to read helloMessageResponse: Error")
+    }
+
+    @Test
+    fun secureConnectInvalidResponseError() {
+
+        val subscriber = TestObserver<Boolean>()
+        val deviceID = "mockedID"
+        val response = "01:01:01:01:01:01".encodeToByteArray()
+        val hmResponse = "helloMessageResponse".encodeToByteArray()
+
+        transportPluginMock = mock<ITransportPlugin> {
+            on { connect(deviceID) } doReturn Single.just(true)
+            on { sendHandshakeHello(any(), any()) } doReturn Single.just(true)
+            on { readHandshakeResponse(any()) } doReturn  Single.just(response)
+            on { sendHelloMessage(any(), any()) } doReturn  Single.just(true)
+            on { readHelloMessageResponse(any()) } doReturn  Single.just(hmResponse)
+        }
+
+        authPluginMock = mock<IAuthenticationPlugin> {
+            on { getProtocolID() } doReturn "HMAC_MD5"
+            on { sign(any(), any()) } doReturn "signature".encodeToByteArray()
+            on { verifySignature(any(), any(), any()) } doReturn false
+        }
+
+        cryptoPluginMock = mock<ICryptographicPlugin> {
+            on { getProtocolID() } doReturn "RC4"
+            on { generateSecretKey(any()) } doReturn SecretKeySpec("key".encodeToByteArray(), "RC4")
+        }
+
+        val authorizationResponse = AuthorizationResponse("OTP".encodeToByteArray(), "SESSIONKEY".encodeToByteArray(), "AUTHPACK".encodeToByteArray(), "RC4_HMAC_MD5")
+        val gson = Gson()
+
+        val contextNetCoreMock = mock<IAuthorizationProvider>()
+        whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
+
+        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSec.setAuthorizationProvider(contextNetCoreMock)
+        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+
+        subscriber.assertError(Exception::class.java)
+        subscriber.assertErrorMessage("Invalid HelloMessageResponse from device")
+    }
+
+    @Test
+    fun secureConnectSuccess() {
+
+        val subscriber = TestObserver<Boolean>()
+        val deviceID = "mockedID"
+        val response = "01:01:01:01:01:01".encodeToByteArray()
+        val hmResponse = "helloMessageResponse".encodeToByteArray()
+
+        transportPluginMock = mock<ITransportPlugin> {
+            on { connect(deviceID) } doReturn Single.just(true)
+            on { sendHandshakeHello(any(), any()) } doReturn Single.just(true)
+            on { readHandshakeResponse(any()) } doReturn  Single.just(response)
+            on { sendHelloMessage(any(), any()) } doReturn  Single.just(true)
+            on { readHelloMessageResponse(any()) } doReturn  Single.just(hmResponse)
+        }
+
+        authPluginMock = mock<IAuthenticationPlugin> {
+            on { getProtocolID() } doReturn "HMAC_MD5"
+            on { sign(any(), any()) } doReturn "signature".encodeToByteArray()
+            on { verifySignature(any(), any(), any()) } doReturn true
+        }
+
+        cryptoPluginMock = mock<ICryptographicPlugin> {
+            on { getProtocolID() } doReturn "RC4"
+            on { generateSecretKey(any()) } doReturn SecretKeySpec("key".encodeToByteArray(), "RC4")
+        }
+
+        val authorizationResponse = AuthorizationResponse("OTP".encodeToByteArray(), "SESSIONKEY".encodeToByteArray(), "AUTHPACK".encodeToByteArray(), "RC4_HMAC_MD5")
+        val gson = Gson()
+
+        val contextNetCoreMock = mock<IAuthorizationProvider>()
+        whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
+
+        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSec.setAuthorizationProvider(contextNetCoreMock)
+        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+
+        subscriber.assertComplete()
+        subscriber.assertNoErrors()
+    }
+
+    @Test
+    fun secureReadNotAuthenticated() {
+        val subscriber = TestObserver<ByteArray>()
+        val deviceID = "mockedIDWrong"
+
+        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSec.secureRead(deviceID).subscribe(subscriber)
+
+        subscriber.assertError(Exception::class.java)
+        subscriber.assertErrorMessage("Device not connected and authenticated")
+    }
+
+    @Test
+    fun secureReadFailToRead() {
+        val subscriberConnect = TestObserver<Boolean>()
+        val subscriber = TestObserver<ByteArray>()
+        val response = "01:01:01:01:01:01".encodeToByteArray()
+        val hmResponse = "helloMessageResponse".encodeToByteArray()
+        val deviceID = "mockedID"
+
+        transportPluginMock = mock<ITransportPlugin> {
+            on { connect(deviceID) } doReturn Single.just(true)
+            on { sendHandshakeHello(any(), any()) } doReturn Single.just(true)
+            on { readHandshakeResponse(any()) } doReturn  Single.just(response)
+            on { sendHelloMessage(any(), any()) } doReturn  Single.just(true)
+            on { readHelloMessageResponse(any()) } doReturn  Single.just(hmResponse)
+            on { readData(any()) } doReturn  Single.create{emitter -> emitter.onError(Exception("Error"))}
+        }
+
+        authPluginMock = mock<IAuthenticationPlugin> {
+            on { getProtocolID() } doReturn "HMAC_MD5"
+            on { sign(any(), any()) } doReturn "signature".encodeToByteArray()
+            on { verifySignature(any(), any(), any()) } doReturn true
+        }
+
+        cryptoPluginMock = mock<ICryptographicPlugin> {
+            on { getProtocolID() } doReturn "RC4"
+            on { generateSecretKey(any()) } doReturn SecretKeySpec("key".encodeToByteArray(), "RC4")
+        }
+
+        val authorizationResponse = AuthorizationResponse("OTP".encodeToByteArray(), "SESSIONKEY".encodeToByteArray(), "AUTHPACK".encodeToByteArray(), "RC4_HMAC_MD5")
+        val gson = Gson()
+
+        val contextNetCoreMock = mock<IAuthorizationProvider>()
+        whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
+
+        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSec.setAuthorizationProvider(contextNetCoreMock)
+        edgeSec.secureConnect(deviceID).subscribe(subscriberConnect)
+
+        edgeSec.secureRead(deviceID).subscribe(subscriber)
+
+        subscriber.assertError(Exception::class.java)
+        subscriber.assertErrorMessage("Error")
     }
 
     @Test
