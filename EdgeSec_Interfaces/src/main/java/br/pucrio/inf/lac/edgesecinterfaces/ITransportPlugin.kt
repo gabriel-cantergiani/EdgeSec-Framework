@@ -15,7 +15,7 @@ Description: Interface for plugin that provides a transportation protocol implem
 interface ITransportPlugin {
 
     /*
-        Scan for nearby compatible devices using the BLE transport protocol
+        Scan for nearby compatible devices using a transport protocol
 
         Returns:
             - Observable that emits the MacAddress of devices that are found
