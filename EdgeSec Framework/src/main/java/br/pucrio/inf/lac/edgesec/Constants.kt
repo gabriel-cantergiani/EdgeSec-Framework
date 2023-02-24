@@ -9,9 +9,9 @@ Object: Constants
 Description: Constant values used in the package
  */
 object Constants {
-    const val EDGESEC_VERSION_BYTES_SIZE = 2
-    const val GATEWAY_ID_BYTES_SIZE = 17
-    const val DEVICE_ID_BYTES_SIZE = 17
+    const val EDGESEC_VERSION_BYTES_SIZE = 3
+    const val GATEWAY_ID_BYTES_SIZE = 10
+    const val DEVICE_ID_BYTES_SIZE = 10
 
     // Handshake
     const val HANDSHAKE_HELLO_BYTES_SIZE = EDGESEC_VERSION_BYTES_SIZE + GATEWAY_ID_BYTES_SIZE

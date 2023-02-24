@@ -15,6 +15,7 @@ import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
 import java.util.*
+import kotlin.math.ceil
 
 /*
 Class: BLE.kt
@@ -26,6 +27,7 @@ class BLE(
 
     private val TAG = "BLE"
     private val cacheSize = 20
+    private val MTU = 20
 
     private val connectionsCache = LruCache<String, RxBleConnection>(cacheSize)
     private val disposables = CompositeDisposable()
@@ -74,7 +76,22 @@ class BLE(
             .doOnError { connectionsCache.remove(deviceID) }
             .subscribe(
                 {
-                    emitter.onSuccess(true); },
+                    it.discoverServices().subscribe(
+                        {
+                            it.bluetoothGattServices.forEach {
+                                if(it.uuid === characteristics["SECURITY_SERVICE_UUID"]) {
+                                    emitter.onSuccess(true);
+                                }
+                            }
+                            emitter.onSuccess(false);
+                        },
+                        { error ->
+                            if (!emitter.isDisposed) {
+                                emitter.onError(error)
+                            }
+                        }
+                    )
+                },
                 { error ->
                     if (!emitter.isDisposed) {
                         emitter.onError(error)
@@ -154,8 +171,36 @@ class BLE(
             - Observable that emits true in case of successful write, and false otherwise.
      */
     override fun sendHelloMessage(deviceID: String, data: ByteArray): Single<Boolean> {
-        // TODO: Break data in 3 parts of 20 bytes
-        return writeDataToCharacteristic(deviceID, data, "SEND_HELLO_MESSAGE_UUID")
+        // Detect in how many parts the message should be divided
+        val messagePartsCount = ceil(data.size.toDouble() / MTU).toInt();
+        val messages = ArrayList<ByteArray>(messagePartsCount);
+
+        // Copy each part of data buffer to a separate message variable
+        for (i in 0..messagePartsCount) {
+            messages[i] = ByteArray(MTU);
+            val startIndex = i * MTU;
+            messages[i] = data.copyOfRange(startIndex, startIndex + MTU);
+        }
+
+        // Send it message sequentially and store observable results in array
+        val results = ArrayList<Single<Boolean>>(messagePartsCount);
+        messages.forEach {
+            val result = writeDataToCharacteristic(deviceID, it, "SEND_HELLO_MESSAGE_UUID");
+            results.add(result);
+        }
+
+        // Concatenate observable and process results sequentially. If one fails, return false. If all complete, return true
+        return Single.create { emitter ->
+            Single.concat(results).subscribe(
+                {
+                    if (!it) {
+                        emitter.onSuccess(false);
+                    }
+                },
+                {emitter.onError(it)},
+                {emitter.onSuccess(true)}
+            )
+        }
     }
 
     /*
@@ -211,6 +256,8 @@ class BLE(
      */
     private fun writeDataToCharacteristic(deviceID: String, data: ByteArray, characteristicName: String): Single<Boolean> {
         val connection = connectionsCache[deviceID] ?: return Single.create{emitter -> emitter.onError(Exception("Device is not connected and authenticated"))}
+
+        // TODO: break data into chunks if its larger than 20 bytes (or MTU value)
 
         return Single.create<Boolean> { emitter ->
             connection.writeCharacteristic(characteristics[characteristicName]!!, data).subscribe(

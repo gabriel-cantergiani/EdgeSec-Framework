@@ -24,7 +24,7 @@ class EdgeSec() : IEdgeSec {
 
     private val TAG = "EdgeSec"
     private val EdgeSecVersion = "1.0"
-    private var gatewayID: String = ""
+    private var gatewayID: String = "ID_GATEWAY"
     private var transportPlugin: ITransportPlugin? = null
     private var cryptoPlugins: ArrayList<ICryptographicPlugin>? = null
     private var authPlugins: ArrayList<IAuthenticationPlugin>? = null
