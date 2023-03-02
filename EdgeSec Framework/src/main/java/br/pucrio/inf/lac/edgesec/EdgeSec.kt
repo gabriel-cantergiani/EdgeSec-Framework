@@ -94,7 +94,7 @@ class EdgeSec() : IEdgeSec {
         this.transportPlugin ?: throw Exception("Transport Plugin not initialized")
 
         // Call transport plugin to scan for compatible devices
-        return this.transportPlugin!!.scanForCompatibleDevices()
+        return this.transportPlugin!!.scanDevices()
     }
 
     /*
@@ -260,6 +260,23 @@ class EdgeSec() : IEdgeSec {
         val message = encryptedData + signature
         // Invoke TransportPlugin to send message
         return transportPlugin!!.writeData(deviceID, message)
+    }
+
+    /*
+    Disconnects from a connected device
+
+    Parameters:
+        - deviceID: String identifying MacAddress of device to connect
+     */
+    override fun disconnect(deviceID: String) {
+        // Verify if device is connected and authenticated
+        val secureConnection = secureConnections?.get(deviceID) ?: return
+
+        // Disconnect using Transport Plugin
+        transportPlugin?.disconnect(deviceID)
+
+        // Remove from connections cache
+        secureConnections?.remove(deviceID);
     }
 
 

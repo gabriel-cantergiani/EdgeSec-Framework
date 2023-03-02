@@ -70,4 +70,12 @@ interface IEdgeSec {
         - Observable that emits true if write was succeeded and false otherwise
      */
     fun secureWrite(deviceID: String, data: ByteArray): Single<Boolean>;
+
+    /*
+    Disconnects from a connected device
+
+    Parameters:
+        - deviceID: String identifying MacAddress of device to connect
+     */
+    fun disconnect(deviceID: String);
 }

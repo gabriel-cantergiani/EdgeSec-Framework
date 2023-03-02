@@ -14,6 +14,7 @@ import com.polidea.rxandroidble2.scan.ScanSettings
 import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.disposables.Disposable
 import java.util.*
 import kotlin.math.ceil
 
@@ -30,7 +31,7 @@ class BLE(
     private val MTU = 20
 
     private val connectionsCache = LruCache<String, RxBleConnection>(cacheSize)
-    private val disposables = CompositeDisposable()
+    private val disposables = LruCache<String, Disposable>(cacheSize)
 
     private val characteristics: Map<String, UUID> = mapOf(
         "SECURITY_SERVICE_UUID" to UUID.fromString("dc33e26c-a82e-4fea-82ab-daa5dfac3dd3"),
@@ -47,13 +48,12 @@ class BLE(
     }
 
     /*
-        Scan for nearby compatible devices using the BLE transport protocol
+        Scan for nearby devices using the BLE transport protocol
 
         Returns:
             - Observable that emits the MacAddress of devices that are found
      */
-    override fun scanForCompatibleDevices(): Observable<String> {
-        // TODO: Review verifyCompatibility before returning it
+    override fun scanDevices(): Observable<String> {
         return configureScan()
             .retryWhen { it.observeIfStateIsReady() }
             .map { it.bleDevice.macAddress }
@@ -99,7 +99,7 @@ class BLE(
                 }
             )
             .let {
-                disposables.add(it)
+                disposables.put(deviceID, it)
             }
         }
     }
@@ -114,9 +114,37 @@ class BLE(
             - Observable that emits true if it is successful, and false otherwise
      */
     override fun verifyDeviceCompatibility(deviceID: String): Single<Boolean> {
-        // TODO: MOCKED
-        return Single.create<Boolean>{emitter -> emitter.onSuccess(deviceID == "60-7D-E2-2F-C7-67") }
-        // MOCKED
+        return Single.create<Boolean> {
+                emitter -> bleClient.getBleDevice(deviceID)
+            .establishConnection(false)
+            .subscribe(
+                {
+                    it.discoverServices().subscribe(
+                        {
+                            it.bluetoothGattServices.forEach {
+                                if(it.uuid === characteristics["SECURITY_SERVICE_UUID"]) {
+                                    emitter.onSuccess(true);
+                                }
+                            }
+                            emitter.onSuccess(false);
+                        },
+                        { error ->
+                            if (!emitter.isDisposed) {
+                                emitter.onError(error)
+                            }
+                        }
+                    )
+                },
+                { error ->
+                    if (!emitter.isDisposed) {
+                        emitter.onError(error)
+                    }
+                }
+            )
+            .let {
+                disposables.put(deviceID, it)
+            }
+        }
     }
 
     /*
@@ -171,16 +199,10 @@ class BLE(
             - Observable that emits true in case of successful write, and false otherwise.
      */
     override fun sendHelloMessage(deviceID: String, data: ByteArray): Single<Boolean> {
-        // Detect in how many parts the message should be divided
-        val messagePartsCount = ceil(data.size.toDouble() / MTU).toInt();
-        val messages = ArrayList<ByteArray>(messagePartsCount);
 
-        // Copy each part of data buffer to a separate message variable
-        for (i in 0..messagePartsCount) {
-            messages[i] = ByteArray(MTU);
-            val startIndex = i * MTU;
-            messages[i] = data.copyOfRange(startIndex, startIndex + MTU);
-        }
+        // Detect in how many parts the message should be divided
+        val messages = breakMessagesIntoParts(data);
+        val messagePartsCount = messages.size;
 
         // Send it message sequentially and store observable results in array
         val results = ArrayList<Single<Boolean>>(messagePartsCount);
@@ -244,6 +266,19 @@ class BLE(
     }
 
     /*
+        Disconnects from device
+
+        Parameters:
+            - device_id: string identifying MacAddress of device
+     */
+    override fun disconnect(deviceID: String) {
+        connectionsCache.remove(deviceID)
+        val disposable = disposables[deviceID]
+        disposable?.dispose()
+        disposables.remove(deviceID)
+    }
+
+    /*
         Generic auxiliary function that writes data to a certain BLE characteristic
 
         Parameters:
@@ -257,20 +292,43 @@ class BLE(
     private fun writeDataToCharacteristic(deviceID: String, data: ByteArray, characteristicName: String): Single<Boolean> {
         val connection = connectionsCache[deviceID] ?: return Single.create{emitter -> emitter.onError(Exception("Device is not connected and authenticated"))}
 
-        // TODO: break data into chunks if its larger than 20 bytes (or MTU value)
+        // Detect in how many parts the message should be divided
+        val messageParts = breakMessagesIntoParts(data);
+        val messagePartsCount = messageParts.size;
 
-        return Single.create<Boolean> { emitter ->
-            connection.writeCharacteristic(characteristics[characteristicName]!!, data).subscribe(
+        if (messagePartsCount <= 1) {
+            return Single.create<Boolean> { emitter ->
+                connection.writeCharacteristic(characteristics[characteristicName]!!, data).subscribe(
+                    {
+                        Log.d(TAG, "$characteristicName Characteristic wrote successfully: " + it.decodeToString())
+                        emitter.onSuccess(true)
+                    },
+                    {
+                        Log.d(TAG, "Error writing $characteristicName Characteristic")
+                        emitter.onError(it)
+                    }
+                )
+            }
+        }
+
+        // Send it message sequentially and store observable results in array
+        val results = ArrayList<Single<ByteArray>>(messagePartsCount);
+        messageParts.forEach {
+            val result = connection.writeCharacteristic(characteristics[characteristicName]!!, data);
+            results.add(result);
+        }
+
+        // Concatenate observable and process results sequentially. If one fails, return false. If all complete, return true
+        return Single.create { emitter ->
+            Single.concat(results).subscribe(
                 {
-                    Log.d(TAG, "$characteristicName Characteristic wrote successfully: " + it.decodeToString())
-                    emitter.onSuccess(true)
+                    Log.d(TAG, "$characteristicName Characteristic wrote successfully (part): " + it.decodeToString())
                 },
-                {
-                    Log.d(TAG, "Error writing $characteristicName Characteristic")
-                    emitter.onError(it)
-                }
+                {emitter.onError(it)},
+                {emitter.onSuccess(true)}
             )
         }
+
     }
 
     /*
@@ -342,6 +400,21 @@ class BLE(
         RxBleClient.State.BLUETOOTH_NOT_ENABLED -> throw Exception("Bluetooth not enabled")
         RxBleClient.State.LOCATION_SERVICES_NOT_ENABLED -> throw Exception("Location not enabled")
         else -> throw IllegalStateException(state.name)
+    }
+
+    private fun breakMessagesIntoParts(message: ByteArray): ArrayList<ByteArray> {
+        // Detect in how many parts the message should be divided
+        val messagePartsCount = ceil(message.size.toDouble() / MTU).toInt();
+        val messageParts = ArrayList<ByteArray>(messagePartsCount);
+
+        // Copy each part of data buffer to a separate message variable
+        for (i in 0..messagePartsCount) {
+            messageParts[i] = ByteArray(MTU);
+            val startIndex = i * MTU;
+            messageParts[i] = message.copyOfRange(startIndex, startIndex + MTU);
+        }
+
+        return messageParts;
     }
 
 }

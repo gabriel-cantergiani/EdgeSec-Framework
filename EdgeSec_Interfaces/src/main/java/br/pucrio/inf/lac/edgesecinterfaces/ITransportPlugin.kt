@@ -15,12 +15,12 @@ Description: Interface for plugin that provides a transportation protocol implem
 interface ITransportPlugin {
 
     /*
-        Scan for nearby compatible devices using a transport protocol
+        Scan for nearby devices using a transport protocol
 
         Returns:
             - Observable that emits the MacAddress of devices that are found
      */
-    fun scanForCompatibleDevices(): Observable<String>;
+    fun scanDevices(): Observable<String>;
 
     /*
        Tries to connect with a device using BLE protocol
@@ -124,5 +124,13 @@ interface ITransportPlugin {
             - Observable that emits true if write is successful, and false otherwise.
      */
     fun writeData(deviceID: String, data: ByteArray): Single<Boolean>;
+
+    /*
+        Disconnects from device
+
+        Parameters:
+            - device_id: string identifying MacAddress of device
+     */
+    fun disconnect(deviceID: String);
 
 }
