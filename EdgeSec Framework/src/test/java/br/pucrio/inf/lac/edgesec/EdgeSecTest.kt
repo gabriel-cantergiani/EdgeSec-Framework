@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
+import java.util.ArrayList
 import javax.crypto.spec.SecretKeySpec
 
 internal class EdgeSecTest {
@@ -26,14 +27,14 @@ internal class EdgeSecTest {
     var transportPluginMock: ITransportPlugin? = null
     var authPluginMock: IAuthenticationPlugin? = null
     var cryptoPluginMock: ICryptographicPlugin? = null
-    var gatewayID = "00:00:00:00:00:00"
+    var gatewayID = "ID_GATEWAY"
     var authPlugins = arrayListOf<IAuthenticationPlugin>()
     var cryptoPlugins = arrayListOf<ICryptographicPlugin>()
 
     @BeforeEach
     fun setUp() {
         transportPluginMock = mock<ITransportPlugin> {
-            on { scanForCompatibleDevices() } doReturn Observable.just("mockedDeviceID")
+            on { scanDevices() } doReturn Observable.just("mockedDeviceID")
         }
 
         authPluginMock = mock<IAuthenticationPlugin> {
@@ -44,7 +45,7 @@ internal class EdgeSecTest {
             on { getProtocolID() } doReturn "RC4"
         }
 
-        gatewayID = "00:00:00:00:00:00"
+        gatewayID = "ID_GATEWAY"
         authPlugins = arrayListOf(authPluginMock!!)
         cryptoPlugins = arrayListOf(cryptoPluginMock!!)
 
@@ -66,7 +67,7 @@ internal class EdgeSecTest {
             exception.message
         )
 
-        gatewayID = "00:00:00:00:00:00"
+        gatewayID = "ID_GATEWAY"
         exception = assertThrows(Exception::class.java) {
             edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(), authPlugins)
         }
@@ -437,7 +438,4 @@ internal class EdgeSecTest {
         subscriber.assertErrorMessage("Error")
     }
 
-    @Test
-    fun secureWrite() {
-    }
 }

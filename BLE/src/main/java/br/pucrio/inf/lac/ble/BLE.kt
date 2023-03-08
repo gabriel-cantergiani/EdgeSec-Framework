@@ -28,7 +28,7 @@ class BLE(
 
     private val TAG = "BLE"
     private val cacheSize = 20
-    private val MTU = 20
+    private val DEFAULT_MTU = 20
 
     private val connectionsCache = LruCache<String, RxBleConnection>(cacheSize)
     private val disposables = LruCache<String, Disposable>(cacheSize)
@@ -199,30 +199,7 @@ class BLE(
             - Observable that emits true in case of successful write, and false otherwise.
      */
     override fun sendHelloMessage(deviceID: String, data: ByteArray): Single<Boolean> {
-
-        // Detect in how many parts the message should be divided
-        val messages = breakMessagesIntoParts(data);
-        val messagePartsCount = messages.size;
-
-        // Send it message sequentially and store observable results in array
-        val results = ArrayList<Single<Boolean>>(messagePartsCount);
-        messages.forEach {
-            val result = writeDataToCharacteristic(deviceID, it, "SEND_HELLO_MESSAGE_UUID");
-            results.add(result);
-        }
-
-        // Concatenate observable and process results sequentially. If one fails, return false. If all complete, return true
-        return Single.create { emitter ->
-            Single.concat(results).subscribe(
-                {
-                    if (!it) {
-                        emitter.onSuccess(false);
-                    }
-                },
-                {emitter.onError(it)},
-                {emitter.onSuccess(true)}
-            )
-        }
+        return writeDataToCharacteristic(deviceID, data, "SEND_HELLO_MESSAGE_UUID")
     }
 
     /*
@@ -293,7 +270,8 @@ class BLE(
         val connection = connectionsCache[deviceID] ?: return Single.create{emitter -> emitter.onError(Exception("Device is not connected and authenticated"))}
 
         // Detect in how many parts the message should be divided
-        val messageParts = breakMessagesIntoParts(data);
+        val connectionMTU = connection.mtu ?: DEFAULT_MTU;
+        val messageParts = breakMessagesIntoParts(data, connectionMTU);
         val messagePartsCount = messageParts.size;
 
         if (messagePartsCount <= 1) {
@@ -311,7 +289,7 @@ class BLE(
             }
         }
 
-        // Send it message sequentially and store observable results in array
+        // Send message sequentially and store observable results in array
         val results = ArrayList<Single<ByteArray>>(messagePartsCount);
         messageParts.forEach {
             val result = connection.writeCharacteristic(characteristics[characteristicName]!!, data);
@@ -402,7 +380,7 @@ class BLE(
         else -> throw IllegalStateException(state.name)
     }
 
-    private fun breakMessagesIntoParts(message: ByteArray): ArrayList<ByteArray> {
+    private fun breakMessagesIntoParts(message: ByteArray, MTU: Int): ArrayList<ByteArray> {
         // Detect in how many parts the message should be divided
         val messagePartsCount = ceil(message.size.toDouble() / MTU).toInt();
         val messageParts = ArrayList<ByteArray>(messagePartsCount);
