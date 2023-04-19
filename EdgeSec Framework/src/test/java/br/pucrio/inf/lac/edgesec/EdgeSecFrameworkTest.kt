@@ -18,12 +18,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
-import java.util.ArrayList
 import javax.crypto.spec.SecretKeySpec
 
-internal class EdgeSecTest {
+internal class EdgeSecFrameworkTest {
 
-    private val edgeSec: EdgeSec = EdgeSec()
+    private val edgeSecFramework: EdgeSecFramework = EdgeSecFramework()
     var transportPluginMock: ITransportPlugin? = null
     var authPluginMock: IAuthenticationPlugin? = null
     var cryptoPluginMock: ICryptographicPlugin? = null
@@ -59,7 +58,7 @@ internal class EdgeSecTest {
     fun initializeInvalidParameters() {
         gatewayID = "shortID"
         var exception = assertThrows(Exception::class.java) {
-            edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+            edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
         }
 
         assertEquals(
@@ -69,7 +68,7 @@ internal class EdgeSecTest {
 
         gatewayID = "ID_GATEWAY"
         exception = assertThrows(Exception::class.java) {
-            edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(), authPlugins)
+            edgeSecFramework.initialize(gatewayID, transportPluginMock!!, arrayListOf(), authPlugins)
         }
 
         assertEquals(
@@ -78,7 +77,7 @@ internal class EdgeSecTest {
         )
 
         exception = assertThrows(Exception::class.java) {
-            edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, arrayListOf())
+            edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, arrayListOf())
         }
 
         assertEquals(
@@ -90,7 +89,7 @@ internal class EdgeSecTest {
     @Test
     fun initializeAllParametersValid() {
         assertDoesNotThrow {
-            edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+            edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
         }
     }
 
@@ -99,8 +98,8 @@ internal class EdgeSecTest {
 
         val subscriber = TestObserver<String>()
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
-        edgeSec.searchDevices().subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSecFramework.searchDevices().subscribe(subscriber)
 
         subscriber.assertComplete()
         subscriber.assertNoErrors()
@@ -112,7 +111,7 @@ internal class EdgeSecTest {
     @Test
     fun secureConnectWithoutInitialize() {
         var exception = assertThrows(Exception::class.java) {
-            edgeSec.secureConnect("mockedID")
+            edgeSecFramework.secureConnect("mockedID")
         }
         assertEquals("Transport plugin not initialized", exception.message)
     }
@@ -127,8 +126,8 @@ internal class EdgeSecTest {
             on { connect(deviceID) } doReturn Single.just(false)
         }
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
-        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Failed to connect to device")
@@ -145,8 +144,8 @@ internal class EdgeSecTest {
             on { sendHandshakeHello(any(), any()) } doReturn Single.just(false)
         }
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
-        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Failed to send handshakeHello")
@@ -164,8 +163,8 @@ internal class EdgeSecTest {
             on { readHandshakeResponse(any()) } doReturn  Single.create{emitter -> emitter.onError(Exception("Device is not connected and authenticated"))}
         }
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
-        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Failed to read handshakeHelloResponse: Device is not connected and authenticated")
@@ -187,9 +186,9 @@ internal class EdgeSecTest {
         val contextNetCoreMock = mock<IAuthorizationProvider>()
         whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(false, "testJSON"))
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
-        edgeSec.setAuthorizationProvider(contextNetCoreMock)
-        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSecFramework.setAuthorizationProvider(contextNetCoreMock)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Failed to get authorization from Core")
@@ -215,9 +214,9 @@ internal class EdgeSecTest {
         val contextNetCoreMock = mock<IAuthorizationProvider>()
         whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
-        edgeSec.setAuthorizationProvider(contextNetCoreMock)
-        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSecFramework.setAuthorizationProvider(contextNetCoreMock)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Plugins not supported by smart object")
@@ -253,9 +252,9 @@ internal class EdgeSecTest {
         val contextNetCoreMock = mock<IAuthorizationProvider>()
         whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
-        edgeSec.setAuthorizationProvider(contextNetCoreMock)
-        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSecFramework.setAuthorizationProvider(contextNetCoreMock)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Failed to send helloMessage")
@@ -292,9 +291,9 @@ internal class EdgeSecTest {
         val contextNetCoreMock = mock<IAuthorizationProvider>()
         whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
-        edgeSec.setAuthorizationProvider(contextNetCoreMock)
-        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSecFramework.setAuthorizationProvider(contextNetCoreMock)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Failed to read helloMessageResponse: Error")
@@ -333,9 +332,9 @@ internal class EdgeSecTest {
         val contextNetCoreMock = mock<IAuthorizationProvider>()
         whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
-        edgeSec.setAuthorizationProvider(contextNetCoreMock)
-        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSecFramework.setAuthorizationProvider(contextNetCoreMock)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Invalid HelloMessageResponse from device")
@@ -374,9 +373,9 @@ internal class EdgeSecTest {
         val contextNetCoreMock = mock<IAuthorizationProvider>()
         whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
-        edgeSec.setAuthorizationProvider(contextNetCoreMock)
-        edgeSec.secureConnect(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSecFramework.setAuthorizationProvider(contextNetCoreMock)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertComplete()
         subscriber.assertNoErrors()
@@ -387,8 +386,8 @@ internal class EdgeSecTest {
         val subscriber = TestObserver<ByteArray>()
         val deviceID = "mockedIDWrong"
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
-        edgeSec.secureRead(deviceID).subscribe(subscriber)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, cryptoPlugins, authPlugins)
+        edgeSecFramework.secureRead(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Device not connected and authenticated")
@@ -428,11 +427,11 @@ internal class EdgeSecTest {
         val contextNetCoreMock = mock<IAuthorizationProvider>()
         whenever(contextNetCoreMock.authorize(any(), any())).thenReturn(Pair(true, gson.toJson(authorizationResponse)))
 
-        edgeSec.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
-        edgeSec.setAuthorizationProvider(contextNetCoreMock)
-        edgeSec.secureConnect(deviceID).subscribe(subscriberConnect)
+        edgeSecFramework.initialize(gatewayID, transportPluginMock!!, arrayListOf(cryptoPluginMock!!), arrayListOf(authPluginMock!!))
+        edgeSecFramework.setAuthorizationProvider(contextNetCoreMock)
+        edgeSecFramework.secureConnect(deviceID).subscribe(subscriberConnect)
 
-        edgeSec.secureRead(deviceID).subscribe(subscriber)
+        edgeSecFramework.secureRead(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
         subscriber.assertErrorMessage("Error")

@@ -1,4 +1,4 @@
-package br.pucrio.inf.lac.ble
+package br.pucrio.inf.lac.bletransport
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

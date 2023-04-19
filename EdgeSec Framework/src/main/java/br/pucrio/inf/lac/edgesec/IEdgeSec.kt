@@ -12,12 +12,12 @@ import io.reactivex.Single
 
 /*
 Interface: IEdgeSec
-Description: Public interface for using EdgeSec framework
+Description: Public interface for using EdgeSecFramework framework
  */
 interface IEdgeSec {
 
     /*
-       Set up EdgeSec framework initializing main variables and plugins
+       Set up EdgeSecFramework framework initializing main variables and plugins
 
        Parameters:
            - gatewayID: string identifying MacAddress of gateway
@@ -30,7 +30,7 @@ interface IEdgeSec {
 
 
     /*
-        Search for devices nearby that are compatible with EdgeSec using transport protocol
+        Search for devices nearby that are compatible with EdgeSecFramework using transport protocol
 
         Returns:
              - Observable that emits strings representing the MacAddress of devices that are found

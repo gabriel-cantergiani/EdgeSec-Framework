@@ -1,4 +1,4 @@
-package br.pucrio.inf.lac.ble
+package br.pucrio.inf.lac.bletransport
 
 import org.junit.Test
 

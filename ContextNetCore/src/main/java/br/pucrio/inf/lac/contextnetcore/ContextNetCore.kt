@@ -4,6 +4,7 @@ Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.contextnetcore
 
+import br.pucrio.inf.lac.contextnetcore.ContextNetCore.decodeByteArrayToHexString
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
 import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
 import br.pucrio.inf.lac.hmacmd5authentication.HmacMD5
@@ -18,23 +19,27 @@ object ContextNetCore : IAuthorizationProvider {
 
     private val coreAuthKey = "Kauth_core".encodeToByteArray();
 
-    private val registeredObjects = arrayOf<String>("0879C623C9C8", "24:6F:28:B5:D8:3A");
+    private val registeredObjects = arrayOf<String>("0879C623C9C8", "24:6F:28:B5:D8:3A", "ID_DEVICE0");
     private val objectsAuthKeys = mapOf<String, ByteArray>(
         "0879C623C9C8" to "Kauth_Obj1".encodeToByteArray(),
         "24:6F:28:B5:D8:3A" to "Kauth_Obj2".encodeToByteArray(),
+        "ID_DEVICE0" to "Kauth_obj".encodeToByteArray(),
     )
     private val objectsCipherKeys = mapOf<String, ByteArray>(
         "0879C623C9C8" to "Kcipher_Obj1".encodeToByteArray(),
         "24:6F:28:B5:D8:3A" to "Kcipher_Obj2".encodeToByteArray(),
+        "ID_DEVICE0" to "Kcipher_obj".encodeToByteArray(),
     )
 
     private val objectsSupportedProtocolSuites = mapOf<String, Array<String>>(
         "0879C623C9C8" to arrayOf<String>("RC4_HMAC_MD5", "AES128_HMAC_MD5"),
         "24:6F:28:B5:D8:3A" to arrayOf<String>("RC4_HMAC_MD5"),
+        "ID_DEVICE0" to arrayOf<String>("RC4_HMAC_MD5"),
     )
     private val objectsAuthorizedGateways = mapOf<String, Array<String>>(
         "0879C623C9C8" to arrayOf<String>("736DF76FC9KU", "LK9JD765JKO9"),
         "24:6F:28:B5:D8:3A" to arrayOf<String>("808DE88FC8TE", "02:00:00:00:00:00"),
+        "ID_DEVICE0" to arrayOf<String>("808DE88FC8TE", "02:00:00:00:00:00", "GATEWAY_ID"),
     )
 
     private var cryptoPlugins = mapOf<String, ICryptographicPlugin>(
@@ -43,7 +48,7 @@ object ContextNetCore : IAuthorizationProvider {
     )
 
     private var authPlugins = mapOf<String, IAuthenticationPlugin>(
-        "HMAC_SHA1" to HmacMD5(), // TODO: REPLACE WITH AES128 IMPLEMENTATION
+        "HMAC_SHA1" to HmacMD5(), // TODO: REPLACE WITH HMAC_SHA1 IMPLEMENTATION
         "HMAC_MD5" to HmacMD5(),
     )
 
@@ -79,12 +84,14 @@ object ContextNetCore : IAuthorizationProvider {
 
         // Generate authentication values
         val otpChallenge = cryptoPlugin.generateSecureRandomToken(Constants.OTP_BYTES_SIZE)
+        print("otpChallenge (${otpChallenge.size}): " + otpChallenge.decodeByteArrayToHexString())
         val sessionKey = generateSessionKey(Constants.SESSION_KEY_BYTES_SIZE, cryptoPlugin)
+        print("sessionKey (${sessionKey.size}): " + sessionKey.decodeByteArrayToHexString())
         val otp = generateOTP(objectID, gatewayID, otpChallenge, authPlugin)
 
         // Create authentication package
         val authenticationPackage =
-            generateAuthPackage(objectsCipherKeys[objectID]!!, otp, sessionKey, cryptoPlugin, authPlugin)
+            generateAuthPackage(objectsCipherKeys[objectID]!!, otpChallenge, sessionKey, cryptoPlugin, authPlugin)
 
         // Build response (with protocol suites)
         val response = AuthorizationResponse(otp, sessionKey, authenticationPackage, selectedProtocolSuite)
@@ -162,17 +169,20 @@ object ContextNetCore : IAuthorizationProvider {
     */
     private fun generateAuthPackage(
         cipherKey: ByteArray,
-        otp: ByteArray,
+        otpChallenge: ByteArray,
         sessionKey: ByteArray,
         cryptoPlugin: ICryptographicPlugin,
         authPlugin: IAuthenticationPlugin
     ): ByteArray {
 
-        val authPackage = otp + sessionKey
+        val authPackage = otpChallenge + sessionKey
+        print("GeneratedAuthPackage (${authPackage.size}): " + authPackage.decodeByteArrayToHexString())
         val encryptedAuthPackage = cryptoPlugin.encrypt(authPackage, cipherKey)
+        print("EncryptedAuthPackage (${encryptedAuthPackage.size}): " + encryptedAuthPackage.decodeByteArrayToHexString())
         val signingKey = cryptoPlugin.generateSecretKey(coreAuthKey)
         val authPackageSignature = authPlugin.sign(encryptedAuthPackage, signingKey)
-
+        print("Signature (${authPackageSignature.size}): " + authPackageSignature.decodeByteArrayToHexString())
+        print("SignedAuthPackage (${(encryptedAuthPackage + authPackageSignature).size}): " + (encryptedAuthPackage + authPackageSignature).decodeByteArrayToHexString())
         return encryptedAuthPackage + authPackageSignature
     }
 
@@ -188,7 +198,9 @@ object ContextNetCore : IAuthorizationProvider {
     */
     private fun generateSessionKey(size: Int, cryptoPlugin: ICryptographicPlugin): ByteArray {
         val seed = cryptoPlugin.generateSecureRandomToken(size)
+        print("Session Key seed (${seed.size}): " + seed.decodeByteArrayToHexString())
         val sessionKey = cryptoPlugin.generateSecretKey(seed);
+        print("Session Key (${sessionKey.encoded.size}): " + sessionKey.encoded.decodeByteArrayToHexString());
         return sessionKey.encoded;
     }
 
@@ -213,7 +225,23 @@ object ContextNetCore : IAuthorizationProvider {
     ): ByteArray {
         val concatenation =
             objectID.encodeToByteArray() + gatewayID.encodeToByteArray() + otpChallenge + objectsAuthKeys[objectID]!!
+
+        print("OTP concat data (${concatenation.size}): " + concatenation.decodeByteArrayToHexString())
         return authPlugin.generateHash(concatenation)
+    }
+
+    private fun print(s: String) {
+        System.out.println("[EDGESEC-DEBUG-CONTEXTNETCORE] " + s)
+    }
+
+    private fun ByteArray.decodeByteArrayToHexString(): String {
+
+        var str: String = "";
+        for (b in this) {
+            str += String.format("%02X", b)
+        }
+
+        return str
     }
 
 

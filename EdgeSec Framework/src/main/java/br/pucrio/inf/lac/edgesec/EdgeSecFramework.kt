@@ -1,5 +1,5 @@
 /*
-Module: EdgeSec.kt
+Module: EdgeSecFramework.kt
 Author: Gabriel Cantergiani
  */
 package br.pucrio.inf.lac.edgesec
@@ -16,13 +16,13 @@ import io.reactivex.Single
 import java.util.*
 
 /*
-Class: EdgeSec
-Description: Main class for EdgeSec framework.
+Class: EdgeSecFramework
+Description: Main class for EdgeSecFramework framework.
 Implements IEdgeSec interface and provides all functionalities to establish a secure connectio and exchange of data
  */
-class EdgeSec() : IEdgeSec {
+class EdgeSecFramework() : IEdgeSec {
 
-    private val TAG = "EdgeSec"
+    private val TAG = "EdgeSecFramework"
     private val EdgeSecVersion = "1.0"
     private var gatewayID: String = "ID_GATEWAY"
     private var transportPlugin: ITransportPlugin? = null
@@ -42,7 +42,7 @@ class EdgeSec() : IEdgeSec {
     }
 
     /*
-       Set up EdgeSec framework initializing main variables
+       Set up EdgeSecFramework framework initializing main variables
 
        Parameters:
            - gatewayID: string identifying MacAddress of gateway
@@ -83,7 +83,7 @@ class EdgeSec() : IEdgeSec {
     }
 
     /*
-        Search for devices nearby that are compatible with EdgeSec using transport protocol
+        Search for devices nearby that are compatible with EdgeSecFramework using transport protocol
 
         Returns:
              - Observable that emits strings representing the MacAddress of devices that are found
@@ -116,7 +116,7 @@ class EdgeSec() : IEdgeSec {
 
 
         return Single.create { emitter ->
-            // Try to connect and perform EdgeSec handshake to negotiate authentication and cryptographic protocols
+            // Try to connect and perform EdgeSecFramework handshake to negotiate authentication and cryptographic protocols
             this.connectAndHandshake(deviceID).subscribe({
                 val objectID = it
 
@@ -134,10 +134,10 @@ class EdgeSec() : IEdgeSec {
                         authorizationResponse.sessionKey
                     )
 
-                    print("OTP: " + authenticationPackage.OTP.decodeByteArrayToHexString())
-                    print("SessionKey: " + authenticationPackage.SessionKey.decodeByteArrayToHexString())
-                    print("Timestamp: " + authenticationPackage.messageTimestamp.decodeByteArrayToHexString())
-                    print("Signed Auth Package: " + authenticationPackage.signedAuthPackage.decodeByteArrayToHexString())
+                    print("OTP (${authenticationPackage.OTP.size}): " + authenticationPackage.OTP.decodeByteArrayToHexString())
+                    print("SessionKey (${authenticationPackage.SessionKey.size}): " + authenticationPackage.SessionKey.decodeByteArrayToHexString())
+                    print("Timestamp (${authenticationPackage.messageTimestamp.size}): " + authenticationPackage.messageTimestamp.decodeByteArrayToHexString())
+                    print("Signed Auth Package (${authenticationPackage.signedAuthPackage.size}): " + authenticationPackage.signedAuthPackage.decodeByteArrayToHexString())
                     print("Protocol suite: " + authenticationPackage.protocolSuite)
 
                     // Set plugins
@@ -148,7 +148,7 @@ class EdgeSec() : IEdgeSec {
                     else {
                         // Get helloMessage
                         val signedHelloMessage = createHelloMessage(authenticationPackage)
-                        print("HelloMessage: " + signedHelloMessage.decodeByteArrayToHexString())
+                        print("SignedHelloMessage (${signedHelloMessage.size}): " + signedHelloMessage.decodeByteArrayToHexString())
 
                         // Send Hello Message
                         exchangeHelloMessage(deviceID, signedHelloMessage).subscribe({
@@ -160,7 +160,7 @@ class EdgeSec() : IEdgeSec {
                                 verifyHelloMessageResponse(
                                     objectID,
                                     authenticationPackage,
-                                    helloMessageResponse!!
+                                    helloMessageResponse
                                 )
                             if (!success) {
                                 emitter.onError(Exception("Invalid HelloMessageResponse from device"))
@@ -206,7 +206,7 @@ class EdgeSec() : IEdgeSec {
                 if (it == null) {
                     emitter.onError(Exception("Failed to read data from device"))
                 } else {
-                    val message = it!!
+                    val message = it
                     val signatureSize = selectedAuthPlugin!!.getHashSize()
                     val divisionIndex = message.size - signatureSize
                     val encryptedData = message.slice(IntRange(0, divisionIndex)).toByteArray()
@@ -269,9 +269,6 @@ class EdgeSec() : IEdgeSec {
         - deviceID: String identifying MacAddress of device to connect
      */
     override fun disconnect(deviceID: String) {
-        // Verify if device is connected and authenticated
-        val secureConnection = secureConnections?.get(deviceID) ?: return
-
         // Disconnect using Transport Plugin
         transportPlugin?.disconnect(deviceID)
 
@@ -295,16 +292,16 @@ class EdgeSec() : IEdgeSec {
         return Single.create { emitter ->
             // Connect
             this.transportPlugin!!.connect(deviceID).subscribe(
-                {
-                    if (it === false) {
-                        emitter.onError(Exception("Failed to connect to device"))
+                { connectResult ->
+                    if (connectResult == false) {
+                        emitter.onError(Exception("Failed to connect to device - security service not found"))
                     } else {
                         print("Starting handshake")
 
                         // TODO: Review verifyCompatibility
-                        // Use transport plugin to verify if device is compatible with EdgeSec
+                        // Use transport plugin to verify if device is compatible with EdgeSecFramework
                         //        if (!this.transportPlugin!!.verifyDeviceCompatibility(deviceID))
-                        //            throw Exception("Device is not compatible with EdgeSec");
+                        //            throw Exception("Device is not compatible with EdgeSecFramework");
 
                         // Build HandshakeHello message with EdgeSecVersion + gateway ID
                         val version = this.EdgeSecVersion.encodeToByteArray()
@@ -316,8 +313,8 @@ class EdgeSec() : IEdgeSec {
                         //Send HandshakeHello message
                         this.transportPlugin!!.sendHandshakeHello(deviceID, handshakeHelloMessage)
                             .subscribe(
-                                {
-                                    if (!it)
+                                { handShakeHelloResult ->
+                                    if (!handShakeHelloResult)
                                         emitter.onError(Exception("Failed to send handshakeHello"))
                                     else {
                                         print("Handshake sent")
@@ -328,8 +325,7 @@ class EdgeSec() : IEdgeSec {
                                         // Read HandshakeHello response
                                         this.transportPlugin!!.readHandshakeResponse(deviceID)
                                             .subscribe(
-                                                { it ->
-                                                    val handshakeResponse = it
+                                                { handshakeResponse ->
                                                     var lastIndexRead = 0
 
                                                     // Get Device Authentication ID
@@ -371,10 +367,10 @@ class EdgeSec() : IEdgeSec {
 
         val helloMessage =
             authenticationPackage.signedAuthPackage + authenticationPackage.messageTimestamp
-
+        print("helloMessage (${helloMessage.size}): " + helloMessage.decodeByteArrayToHexString())
         val key = selectedCryptoPlugin!!.generateSecretKey(authenticationPackage.OTP)
 
-        return selectedAuthPlugin!!.sign(helloMessage, key)
+        return helloMessage + selectedAuthPlugin!!.sign(this.gatewayID.encodeToByteArray() + helloMessage, key)
     }
 
     /*

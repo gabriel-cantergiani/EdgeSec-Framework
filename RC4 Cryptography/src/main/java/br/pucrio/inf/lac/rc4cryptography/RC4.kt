@@ -42,7 +42,7 @@ class RC4(): ICryptographicPlugin {
 
         val token = StringBuilder()
         val number = SecureRandom.getInstance("SHA1PRNG")
-        for (i in 0..size) {
+        for (i in 1..size) {
             token.append(number.nextInt(9))
         }
 

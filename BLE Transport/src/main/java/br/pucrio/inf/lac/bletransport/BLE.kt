@@ -2,8 +2,9 @@
 Module: BLE.kt
 Author: Gabriel Cantergiani
  */
-package br.pucrio.inf.lac.ble
+package br.pucrio.inf.lac.bletransport
 
+import android.R.attr.data
 import android.util.Log
 import android.util.LruCache
 import br.pucrio.inf.lac.edgesecinterfaces.ITransportPlugin
@@ -13,10 +14,10 @@ import com.polidea.rxandroidble2.scan.ScanResult
 import com.polidea.rxandroidble2.scan.ScanSettings
 import io.reactivex.Observable
 import io.reactivex.Single
-import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.disposables.Disposable
 import java.util.*
 import kotlin.math.ceil
+
 
 /*
 Class: BLE.kt
@@ -53,11 +54,9 @@ class BLE(
         Returns:
             - Observable that emits the MacAddress of devices that are found
      */
-    override fun scanDevices(): Observable<String> {
-        return configureScan()
+    override fun scanDevices(): Observable<String> = configureScan()
             .retryWhen { it.observeIfStateIsReady() }
             .map { it.bleDevice.macAddress }
-    }
 
     /*
        Tries to connect with a device using BLE protocol
@@ -78,12 +77,18 @@ class BLE(
                 {
                     it.discoverServices().subscribe(
                         {
+                            var securityServiceFound = false
                             it.bluetoothGattServices.forEach {
-                                if(it.uuid === characteristics["SECURITY_SERVICE_UUID"]) {
-                                    emitter.onSuccess(true);
+                                if(it.uuid == characteristics["SECURITY_SERVICE_UUID"]) {
+                                    securityServiceFound = true
                                 }
                             }
-                            emitter.onSuccess(false);
+
+                            if (securityServiceFound) {
+                                emitter.onSuccess(true)
+                            } else {
+                                emitter.onError(Exception("Security Service not found"))
+                            }
                         },
                         { error ->
                             if (!emitter.isDisposed) {
@@ -255,6 +260,10 @@ class BLE(
         disposables.remove(deviceID)
     }
 
+    private fun print(s: String) {
+        System.out.println("[EDGESEC-DEBUG-BLE] " + s)
+    }
+
     /*
         Generic auxiliary function that writes data to a certain BLE characteristic
 
@@ -267,46 +276,59 @@ class BLE(
             - Observable that emits true if write is successful, and false otherwise.
      */
     private fun writeDataToCharacteristic(deviceID: String, data: ByteArray, characteristicName: String): Single<Boolean> {
+        print("retriving connection from cache...")
+
         val connection = connectionsCache[deviceID] ?: return Single.create{emitter -> emitter.onError(Exception("Device is not connected and authenticated"))}
 
+        print("Connection retrieved")
         // Detect in how many parts the message should be divided
-        val connectionMTU = connection.mtu ?: DEFAULT_MTU;
-        val messageParts = breakMessagesIntoParts(data, connectionMTU);
-        val messagePartsCount = messageParts.size;
+        val connectionMTU = DEFAULT_MTU;
+        print("Connection MTU = " + connectionMTU)
 
-        if (messagePartsCount <= 1) {
+        if (data.size <= connectionMTU) {
+            print("Count equal or lower than 1. Writing characteristic...")
             return Single.create<Boolean> { emitter ->
                 connection.writeCharacteristic(characteristics[characteristicName]!!, data).subscribe(
                     {
-                        Log.d(TAG, "$characteristicName Characteristic wrote successfully: " + it.decodeToString())
+                        Log.d(TAG, "$characteristicName Characteristic wrote successfully: " + it.decodeByteArrayToHexString())
+                        print(TAG + "$characteristicName Characteristic wrote successfully: " + it.decodeByteArrayToHexString())
                         emitter.onSuccess(true)
                     },
                     {
                         Log.d(TAG, "Error writing $characteristicName Characteristic")
+                        print(TAG + "Error writing $characteristicName Characteristic")
                         emitter.onError(it)
                     }
                 )
             }
         }
 
+        val messageParts = breakMessagesIntoParts(data, connectionMTU);
+        print("Message parts[0] = " + messageParts[0].decodeByteArrayToHexString())
+        val messagePartsCount = messageParts.size;
+        print("Parts count = " + messagePartsCount)
+
+        print("Count higher than 1. Writing sequentially...")
         // Send message sequentially and store observable results in array
         val results = ArrayList<Single<ByteArray>>(messagePartsCount);
         messageParts.forEach {
-            val result = connection.writeCharacteristic(characteristics[characteristicName]!!, data);
+            print("Writing part...")
+            val result = connection.writeCharacteristic(characteristics[characteristicName]!!, it);
             results.add(result);
         }
+        print("All parts are written. Subscribing to result...")
 
         // Concatenate observable and process results sequentially. If one fails, return false. If all complete, return true
         return Single.create { emitter ->
             Single.concat(results).subscribe(
                 {
-                    Log.d(TAG, "$characteristicName Characteristic wrote successfully (part): " + it.decodeToString())
+                    Log.d(TAG, "$characteristicName Characteristic wrote successfully (part): " + it.decodeByteArrayToHexString())
+                    print(TAG + "$characteristicName Characteristic wrote successfully (part): " + it.decodeByteArrayToHexString())
                 },
                 {emitter.onError(it)},
                 {emitter.onSuccess(true)}
             )
         }
-
     }
 
     /*
@@ -325,7 +347,7 @@ class BLE(
         return Single.create<ByteArray> { emitter ->
             connection.readCharacteristic(characteristics[characteristicName]!!).subscribe(
                 {
-                    Log.d(TAG, "$characteristicName Characteristic read successfully: " + it.decodeToString())
+                    Log.d(TAG, "$characteristicName Characteristic read successfully: " + it.decodeByteArrayToHexString())
                     emitter.onSuccess(it)
                 },
                 {
@@ -358,7 +380,7 @@ class BLE(
     private fun Observable<Throwable>.observeIfStateIsReady(): Observable<ScanResult> = flatMap {
         bleClient.observeStateChanges()
             .switchMap { configureScanIfReady(it) }
-            .doOnError { System.out.println(it.localizedMessage)}
+            .doOnError { System.out.println("[DEBUG] BLE TRANSPORT" + it.localizedMessage)}
             .onErrorResumeNext(Observable.empty())
     }
 
@@ -381,18 +403,58 @@ class BLE(
     }
 
     private fun breakMessagesIntoParts(message: ByteArray, MTU: Int): ArrayList<ByteArray> {
+        print("Breaking message into parts")
         // Detect in how many parts the message should be divided
         val messagePartsCount = ceil(message.size.toDouble() / MTU).toInt();
-        val messageParts = ArrayList<ByteArray>(messagePartsCount);
+        print("Parts count = " + messagePartsCount)
+        val messageParts : MutableList<ByteArray> = MutableList(messagePartsCount) { ByteArray(0) }
 
         // Copy each part of data buffer to a separate message variable
-        for (i in 0..messagePartsCount) {
-            messageParts[i] = ByteArray(MTU);
+        for (i in 0..messagePartsCount - 1) {
             val startIndex = i * MTU;
-            messageParts[i] = message.copyOfRange(startIndex, startIndex + MTU);
+            println("startIndex = " + startIndex)
+            var endIndex = startIndex + MTU;
+            println("endIndex = " + endIndex)
+            if (endIndex > message.size) {
+                endIndex = message.size
+            }
+            messageParts[i] = ByteArray(endIndex - startIndex);
+            println("messageParts[" + i + "] : " + messageParts[i].decodeByteArrayToHexString())
+            messageParts[i] = message.copyOfRange(startIndex, endIndex);
+            println("Part " + i + " : " + messageParts[i].decodeByteArrayToHexString())
         }
 
-        return messageParts;
+//        val numberOfPackets = Math.ceil(data.length / chunksize as Double).toInt()
+//
+//        val packets = Array(numberOfPackets) {
+//            ByteArray(
+//                chunksize
+//            )
+//        }
+//
+//        var start = 0
+//        for (i in packets.indices) {
+//            var end: Int = start + chunksize
+//            if (end > data.length) {
+//                end = data.length
+//            }
+//            packets[i] = Arrays.copyOfRange(data, start, end)
+//            start += chunksize
+//        }
+//
+//        return packets
+
+        return ArrayList(messageParts);
+    }
+
+    fun ByteArray.decodeByteArrayToHexString(): String {
+
+        var str: String = "";
+        for (b in this) {
+            str += String.format("%02X", b)
+        }
+
+        return str
     }
 
 }
