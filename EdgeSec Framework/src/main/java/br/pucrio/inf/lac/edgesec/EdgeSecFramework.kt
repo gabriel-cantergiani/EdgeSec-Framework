@@ -197,24 +197,35 @@ class EdgeSecFramework() : IEdgeSec {
     @Suppress("CheckResult")
     override fun secureRead(deviceID: String): Single<ByteArray> {
 
+        print("Starting secure read")
         // Verify if device is connected and authenticated
         val secureConnection = secureConnections?.get(deviceID) ?: return Single.create{emitter -> emitter.onError(Exception("Device not connected and authenticated"))}
 
+        print("Retrieved connection")
         // Invoke TransportPlugin to read data from device
         return Single.create { emitter ->
             transportPlugin!!.readData(deviceID).subscribe({
+                print("Data read")
                 if (it == null) {
+                    print("Data is null")
                     emitter.onError(Exception("Failed to read data from device"))
                 } else {
+                    print("Data is not null. Starting to verify it")
                     val message = it
+                    print("Message: " + message.decodeByteArrayToHexString())
                     val signatureSize = selectedAuthPlugin!!.getHashSize()
+                    print("Signature Size: " + signatureSize)
                     val divisionIndex = message.size - signatureSize
-                    val encryptedData = message.slice(IntRange(0, divisionIndex)).toByteArray()
+                    val encryptedData = message.slice(IntRange(0, divisionIndex - 1)).toByteArray()
+                    print("Encrypted Data: " + encryptedData.decodeByteArrayToHexString())
                     val signature =
-                        message.slice(IntRange(divisionIndex, message.size)).toByteArray()
+                        message.slice(IntRange(divisionIndex, message.size - 1)).toByteArray()
+                    print("Signature: " + signature.decodeByteArrayToHexString())
                     val signingKey = selectedCryptoPlugin!!.generateSecretKey(secureConnection.otp)
+                    print("signing Key: " + signingKey.encoded.decodeByteArrayToHexString())
 
 
+                    print("Verifying signature...")
                     // Invoke AuthenticationPlugin to verify message signature
                     if (!selectedAuthPlugin!!.verifySignature(
                             encryptedData,
@@ -222,17 +233,23 @@ class EdgeSecFramework() : IEdgeSec {
                             signature
                         )
                     ) {
+                        print("Error verifying it")
                         emitter.onError(Exception("Failed to validate message signature"))
                     }
 
+                    print("Verified successfully. Decrypting data...")
+                    print("Session key: " + secureConnection.sessionKey.decodeByteArrayToHexString())
                     // Invoke CryptographyPlugin to decrypt message
                     val decryptedData =
                         selectedCryptoPlugin!!.decrypt(encryptedData, secureConnection.sessionKey)
 
+                    print("Decrypted data: " + decryptedData.decodeToString())
                     // Emit message value
                     emitter.onSuccess(decryptedData)
                 }
-            }, { emitter.onError(it) })
+            }, {
+                print("Error reading data...")
+                emitter.onError(it) })
         }
     }
 

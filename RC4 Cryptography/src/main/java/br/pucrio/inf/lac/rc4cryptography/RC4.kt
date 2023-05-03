@@ -92,6 +92,11 @@ class RC4(): ICryptographicPlugin {
             - ByteArray representing decrypted data
      */
     override fun decrypt(cipher: ByteArray, key: ByteArray): ByteArray {
-        return ByteArray(20);
+        val rc4Key = SecretKeySpec(key, CryptoAlgorithmID)
+        val rc4 = Cipher.getInstance(CryptoAlgorithmID)
+
+        rc4.init(Cipher.DECRYPT_MODE, rc4Key)
+
+        return rc4.update(cipher)
     }
 }
