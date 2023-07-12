@@ -18,7 +18,7 @@ object Constants {
     )
 
     // Authentication
-    const val OTP_BYTES_SIZE = 13
+    const val OTP_CHALLENGE_BYTES_SIZE = 13
     const val SESSION_KEY_BYTES_SIZE = 11
 
 }

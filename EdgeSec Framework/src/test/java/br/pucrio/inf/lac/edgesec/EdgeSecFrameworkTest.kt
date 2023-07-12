@@ -130,7 +130,7 @@ internal class EdgeSecFrameworkTest {
         edgeSecFramework.secureConnect(deviceID).subscribe(subscriber)
 
         subscriber.assertError(Exception::class.java)
-        subscriber.assertErrorMessage("Failed to connect to device")
+        subscriber.assertErrorMessage("Failed to connect to device - security service not found")
     }
 
     @Test

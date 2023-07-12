@@ -45,6 +45,9 @@ class BLE(
         "WRITE_DATA_UUID" to UUID.fromString("2cb4b710-9ec7-47bf-bfc7-ad9341a0773e"),
     )
 
+    private var timingVerifyServiceStart: Long = 0
+    private var timingVerifyServiceFinished: Long = 0
+
     init {
     }
 
@@ -55,8 +58,8 @@ class BLE(
             - Observable that emits the MacAddress of devices that are found
      */
     override fun scanDevices(): Observable<String> = configureScan()
-            .retryWhen { it.observeIfStateIsReady() }
-            .map { it.bleDevice.macAddress }
+        .retryWhen { it.observeIfStateIsReady() }
+        .map { it.bleDevice.macAddress }
 
     /*
        Tries to connect with a device using BLE protocol
@@ -68,44 +71,41 @@ class BLE(
            - Observable that emits true if connection was successful, false otherwise
     */
     override fun connect(deviceID: String): Single<Boolean> {
-        return Single.create<Boolean> {
-         emitter -> bleClient.getBleDevice(deviceID)
-            .establishConnection(false)
-            .doOnNext { connection -> connectionsCache.put(deviceID, connection) }
-            .doOnError { connectionsCache.remove(deviceID) }
-            .subscribe(
-                {
-                    it.discoverServices().subscribe(
-                        {
-                            var securityServiceFound = false
-                            it.bluetoothGattServices.forEach {
-                                if(it.uuid == characteristics["SECURITY_SERVICE_UUID"]) {
-                                    securityServiceFound = true
+        return Single.create<Boolean> { emitter ->
+            bleClient.getBleDevice(deviceID)
+                .establishConnection(false)
+                .doOnNext { connection -> connectionsCache.put(deviceID, connection) }
+                .doOnError { connectionsCache.remove(deviceID) }
+                .subscribe(
+                    {
+                        timingVerifyServiceStart = System.currentTimeMillis()
+                        it.discoverServices().subscribe(
+                            {
+                                it.getService(characteristics["SECURITY_SERVICE_UUID"]!!)
+                                    .subscribe({
+                                        timingVerifyServiceFinished = System.currentTimeMillis()
+                                        print("[TIME] Time to verify seurity service: " + (timingVerifyServiceFinished - timingVerifyServiceStart))
+                                        emitter.onSuccess(true);
+                                    }, {
+                                        emitter.onError(Exception("Security Service not found: " + it.message))
+                                    })
+                            },
+                            { error ->
+                                if (!emitter.isDisposed) {
+                                    emitter.onError(error)
                                 }
                             }
-
-                            if (securityServiceFound) {
-                                emitter.onSuccess(true)
-                            } else {
-                                emitter.onError(Exception("Security Service not found"))
-                            }
-                        },
-                        { error ->
-                            if (!emitter.isDisposed) {
-                                emitter.onError(error)
-                            }
+                        )
+                    },
+                    { error ->
+                        if (!emitter.isDisposed) {
+                            emitter.onError(error)
                         }
-                    )
-                },
-                { error ->
-                    if (!emitter.isDisposed) {
-                        emitter.onError(error)
                     }
+                )
+                .let {
+                    disposables.put(deviceID, it)
                 }
-            )
-            .let {
-                disposables.put(deviceID, it)
-            }
         }
     }
 
@@ -119,36 +119,36 @@ class BLE(
             - Observable that emits true if it is successful, and false otherwise
      */
     override fun verifyDeviceCompatibility(deviceID: String): Single<Boolean> {
-        return Single.create<Boolean> {
-                emitter -> bleClient.getBleDevice(deviceID)
-            .establishConnection(false)
-            .subscribe(
-                {
-                    it.discoverServices().subscribe(
-                        {
-                            it.bluetoothGattServices.forEach {
-                                if(it.uuid === characteristics["SECURITY_SERVICE_UUID"]) {
-                                    emitter.onSuccess(true);
+        return Single.create<Boolean> { emitter ->
+            bleClient.getBleDevice(deviceID)
+                .establishConnection(false)
+                .subscribe(
+                    {
+                        it.discoverServices().subscribe(
+                            {
+                                it.bluetoothGattServices.forEach {
+                                    if (it.uuid === characteristics["SECURITY_SERVICE_UUID"]) {
+                                        emitter.onSuccess(true);
+                                    }
+                                }
+                                emitter.onSuccess(false);
+                            },
+                            { error ->
+                                if (!emitter.isDisposed) {
+                                    emitter.onError(error)
                                 }
                             }
-                            emitter.onSuccess(false);
-                        },
-                        { error ->
-                            if (!emitter.isDisposed) {
-                                emitter.onError(error)
-                            }
+                        )
+                    },
+                    { error ->
+                        if (!emitter.isDisposed) {
+                            emitter.onError(error)
                         }
-                    )
-                },
-                { error ->
-                    if (!emitter.isDisposed) {
-                        emitter.onError(error)
                     }
+                )
+                .let {
+                    disposables.put(deviceID, it)
                 }
-            )
-            .let {
-                disposables.put(deviceID, it)
-            }
         }
     }
 
@@ -275,10 +275,16 @@ class BLE(
         Returns:
             - Observable that emits true if write is successful, and false otherwise.
      */
-    private fun writeDataToCharacteristic(deviceID: String, data: ByteArray, characteristicName: String): Single<Boolean> {
+    private fun writeDataToCharacteristic(
+        deviceID: String,
+        data: ByteArray,
+        characteristicName: String
+    ): Single<Boolean> {
         print("retriving connection from cache...")
 
-        val connection = connectionsCache[deviceID] ?: return Single.create{emitter -> emitter.onError(Exception("Device is not connected and authenticated"))}
+        val connection = connectionsCache[deviceID] ?: return Single.create { emitter ->
+            emitter.onError(Exception("Device is not connected and authenticated"))
+        }
 
         print("Connection retrieved")
         // Detect in how many parts the message should be divided
@@ -288,18 +294,22 @@ class BLE(
         if (data.size <= connectionMTU) {
             print("Count equal or lower than 1. Writing characteristic...")
             return Single.create<Boolean> { emitter ->
-                connection.writeCharacteristic(characteristics[characteristicName]!!, data).subscribe(
-                    {
-                        Log.d(TAG, "$characteristicName Characteristic wrote successfully: " + it.decodeByteArrayToHexString())
-                        print(TAG + "$characteristicName Characteristic wrote successfully: " + it.decodeByteArrayToHexString())
-                        emitter.onSuccess(true)
-                    },
-                    {
-                        Log.d(TAG, "Error writing $characteristicName Characteristic")
-                        print(TAG + "Error writing $characteristicName Characteristic")
-                        emitter.onError(it)
-                    }
-                )
+                connection.writeCharacteristic(characteristics[characteristicName]!!, data)
+                    .subscribe(
+                        {
+                            Log.d(
+                                TAG,
+                                "$characteristicName Characteristic wrote successfully: " + it.decodeByteArrayToHexString()
+                            )
+                            print(TAG + "$characteristicName Characteristic wrote successfully: " + it.decodeByteArrayToHexString())
+                            emitter.onSuccess(true)
+                        },
+                        {
+                            Log.d(TAG, "Error writing $characteristicName Characteristic")
+                            print(TAG + "Error writing $characteristicName Characteristic")
+                            emitter.onError(it)
+                        }
+                    )
             }
         }
 
@@ -322,11 +332,14 @@ class BLE(
         return Single.create { emitter ->
             Single.concat(results).subscribe(
                 {
-                    Log.d(TAG, "$characteristicName Characteristic wrote successfully (part): " + it.decodeByteArrayToHexString())
+                    Log.d(
+                        TAG,
+                        "$characteristicName Characteristic wrote successfully (part): " + it.decodeByteArrayToHexString()
+                    )
                     print(TAG + "$characteristicName Characteristic wrote successfully (part): " + it.decodeByteArrayToHexString())
                 },
-                {emitter.onError(it)},
-                {emitter.onSuccess(true)}
+                { emitter.onError(it) },
+                { emitter.onSuccess(true) }
             )
         }
     }
@@ -341,13 +354,21 @@ class BLE(
         Returns:
             - Observable that emits a ByteArray containing the message if read is successful, and null otherwise.
      */
-    private fun readDataFromCharacteristic(deviceID: String, characteristicName: String): Single<ByteArray> {
-        val connection = connectionsCache[deviceID] ?: return Single.create{emitter -> emitter.onError(Exception("Device is not connected and authenticated"))}
+    private fun readDataFromCharacteristic(
+        deviceID: String,
+        characteristicName: String
+    ): Single<ByteArray> {
+        val connection = connectionsCache[deviceID] ?: return Single.create { emitter ->
+            emitter.onError(Exception("Device is not connected and authenticated"))
+        }
 
         return Single.create<ByteArray> { emitter ->
             connection.readCharacteristic(characteristics[characteristicName]!!).subscribe(
                 {
-                    Log.d(TAG, "$characteristicName Characteristic read successfully: " + it.decodeByteArrayToHexString())
+                    Log.d(
+                        TAG,
+                        "$characteristicName Characteristic read successfully: " + it.decodeByteArrayToHexString()
+                    )
                     emitter.onSuccess(it)
                 },
                 {
@@ -380,7 +401,7 @@ class BLE(
     private fun Observable<Throwable>.observeIfStateIsReady(): Observable<ScanResult> = flatMap {
         bleClient.observeStateChanges()
             .switchMap { configureScanIfReady(it) }
-            .doOnError { System.out.println("[DEBUG] BLE TRANSPORT" + it.localizedMessage)}
+            .doOnError { System.out.println("[DEBUG] BLE TRANSPORT" + it.localizedMessage) }
             .onErrorResumeNext(Observable.empty())
     }
 
@@ -393,21 +414,22 @@ class BLE(
         Returns:
             - Observable that emits a ScanResult.
      */
-    private fun configureScanIfReady(state: RxBleClient.State): Observable<ScanResult> = when (state) {
-        RxBleClient.State.READY -> configureScan()
-        RxBleClient.State.BLUETOOTH_NOT_AVAILABLE -> throw Exception("Bluetooth not available")
-        RxBleClient.State.LOCATION_PERMISSION_NOT_GRANTED -> throw Exception("Location not granted")
-        RxBleClient.State.BLUETOOTH_NOT_ENABLED -> throw Exception("Bluetooth not enabled")
-        RxBleClient.State.LOCATION_SERVICES_NOT_ENABLED -> throw Exception("Location not enabled")
-        else -> throw IllegalStateException(state.name)
-    }
+    private fun configureScanIfReady(state: RxBleClient.State): Observable<ScanResult> =
+        when (state) {
+            RxBleClient.State.READY -> configureScan()
+            RxBleClient.State.BLUETOOTH_NOT_AVAILABLE -> throw Exception("Bluetooth not available")
+            RxBleClient.State.LOCATION_PERMISSION_NOT_GRANTED -> throw Exception("Location not granted")
+            RxBleClient.State.BLUETOOTH_NOT_ENABLED -> throw Exception("Bluetooth not enabled")
+            RxBleClient.State.LOCATION_SERVICES_NOT_ENABLED -> throw Exception("Location not enabled")
+            else -> throw IllegalStateException(state.name)
+        }
 
     private fun breakMessagesIntoParts(message: ByteArray, MTU: Int): ArrayList<ByteArray> {
         print("Breaking message into parts")
         // Detect in how many parts the message should be divided
         val messagePartsCount = ceil(message.size.toDouble() / MTU).toInt();
         print("Parts count = " + messagePartsCount)
-        val messageParts : MutableList<ByteArray> = MutableList(messagePartsCount) { ByteArray(0) }
+        val messageParts: MutableList<ByteArray> = MutableList(messagePartsCount) { ByteArray(0) }
 
         // Copy each part of data buffer to a separate message variable
         for (i in 0..messagePartsCount - 1) {

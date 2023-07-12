@@ -34,6 +34,29 @@ class EdgeSecFramework() : IEdgeSec {
     private var authorization: Authorization? = null
     private var secureConnections: MutableMap<String, SecureConnection>? = null
 
+    // Variables used for Profiling
+    private var timingSecureConnectStart: Long = 0
+    private var timingConnectFinish: Long = 0
+    private var timingHandshakeHelloStart: Long = 0
+    private var timingHandshakeHelloFinish: Long = 0
+    private var timingHandshakeResponseStart: Long = 0
+    private var timingHandshakeResponseFinish: Long = 0
+    private var timingAuthorizationStart: Long = 0
+    private var timingAuthorizationFinish: Long = 0
+    private var timingCreateHelloMessageStart: Long = 0
+    private var timingCreateHelloMessageFinish: Long = 0
+    private var timingSendHelloMessageStart: Long = 0
+    private var timingSendHelloMessageFinish: Long = 0
+    private var timingReadHelloMessageResponseStart: Long = 0
+    private var timingReadHelloMessageResponseFinish: Long = 0
+    private var timingVerifyHelloMessageStart: Long = 0
+    private var timingVerifyHelloMessageFinish: Long = 0
+    private var timingSecureConnectFinish: Long = 0
+    private var timingSecureReadStart: Long = 0
+    private var timingSecureReadReceived: Long = 0
+    private var timingSecureReadVerifyStart: Long = 0
+    private var timingSecureReadFinish: Long = 0
+
     init {
     }
 
@@ -114,16 +137,18 @@ class EdgeSecFramework() : IEdgeSec {
         this.authPlugins ?: throw Exception("Authentication plugins not initialized")
         this.cryptoPlugins ?: throw Exception("Cryptographic plugins not initialized")
 
-
+        timingSecureConnectStart = System.currentTimeMillis()
         return Single.create { emitter ->
             // Try to connect and perform EdgeSecFramework handshake to negotiate authentication and cryptographic protocols
             this.connectAndHandshake(deviceID).subscribe({
                 val objectID = it
 
+                timingAuthorizationStart = System.currentTimeMillis()
                 // Invoke Authorization class to verify if connection is allowed
                 val authorizationResponse =
                     this.authorization?.verifyAuthorization(this.gatewayID, objectID)
 
+                timingAuthorizationFinish = System.currentTimeMillis()
                 if (authorizationResponse == null)
                     emitter.onError(Exception("Failed to get authorization from Core"))
                 else {
@@ -146,15 +171,18 @@ class EdgeSecFramework() : IEdgeSec {
                     if (selectedAuthPlugin == null || selectedCryptoPlugin == null)
                         emitter.onError(Exception("Plugins not supported by smart object"))
                     else {
+                        timingCreateHelloMessageStart = System.currentTimeMillis()
                         // Get helloMessage
                         val signedHelloMessage = createHelloMessage(authenticationPackage)
                         print("SignedHelloMessage (${signedHelloMessage.size}): " + signedHelloMessage.decodeByteArrayToHexString())
+                        timingCreateHelloMessageFinish = System.currentTimeMillis()
 
                         // Send Hello Message
                         exchangeHelloMessage(deviceID, signedHelloMessage).subscribe({
                             val helloMessageResponse = it
                             print("HelloMessageResponse: " + helloMessageResponse!!.decodeByteArrayToHexString())
 
+                            timingVerifyHelloMessageStart = System.currentTimeMillis()
                             // Invoke AuthenticatioPlugin to verify HelloMessageResponse
                             val success =
                                 verifyHelloMessageResponse(
@@ -162,11 +190,13 @@ class EdgeSecFramework() : IEdgeSec {
                                     authenticationPackage,
                                     helloMessageResponse
                                 )
+                            timingVerifyHelloMessageFinish = System.currentTimeMillis()
                             if (!success) {
                                 emitter.onError(Exception("Invalid HelloMessageResponse from device"))
                             } else {
                                 print("HelloMessageResponse validated successfully")
 
+                                timingSecureConnectFinish = System.currentTimeMillis()
                                 // Create SecureConnection class and add it to cache
                                 val newSecureConnection =
                                     SecureConnection(
@@ -175,7 +205,7 @@ class EdgeSecFramework() : IEdgeSec {
                                         authenticationPackage.OTP
                                     )
                                 setSecureConnection(deviceID, newSecureConnection)
-
+                                calculate_auth_time_performance()
                                 emitter.onSuccess(true)
                             }
                         }, { emitter.onError(it) })
@@ -204,8 +234,10 @@ class EdgeSecFramework() : IEdgeSec {
         print("Retrieved connection")
         // Invoke TransportPlugin to read data from device
         return Single.create { emitter ->
+            timingSecureReadStart = System.currentTimeMillis()
             transportPlugin!!.readData(deviceID).subscribe({
                 print("Data read")
+                timingSecureReadReceived = System.currentTimeMillis()
                 if (it == null) {
                     print("Data is null")
                     emitter.onError(Exception("Failed to read data from device"))
@@ -225,6 +257,7 @@ class EdgeSecFramework() : IEdgeSec {
                     print("signing Key: " + signingKey.encoded.decodeByteArrayToHexString())
 
 
+                    timingSecureReadVerifyStart = System.currentTimeMillis()
                     print("Verifying signature...")
                     // Invoke AuthenticationPlugin to verify message signature
                     if (!selectedAuthPlugin!!.verifySignature(
@@ -243,7 +276,9 @@ class EdgeSecFramework() : IEdgeSec {
                     val decryptedData =
                         selectedCryptoPlugin!!.decrypt(encryptedData, secureConnection.sessionKey)
 
+                    timingSecureReadFinish = System.currentTimeMillis()
                     print("Decrypted data: " + decryptedData.decodeToString())
+                    calculate_read_time_performance()
                     // Emit message value
                     emitter.onSuccess(decryptedData)
                 }
@@ -310,15 +345,11 @@ class EdgeSecFramework() : IEdgeSec {
             // Connect
             this.transportPlugin!!.connect(deviceID).subscribe(
                 { connectResult ->
+                    timingConnectFinish = System.currentTimeMillis()
                     if (connectResult == false) {
                         emitter.onError(Exception("Failed to connect to device - security service not found"))
                     } else {
                         print("Starting handshake")
-
-                        // TODO: Review verifyCompatibility
-                        // Use transport plugin to verify if device is compatible with EdgeSecFramework
-                        //        if (!this.transportPlugin!!.verifyDeviceCompatibility(deviceID))
-                        //            throw Exception("Device is not compatible with EdgeSecFramework");
 
                         // Build HandshakeHello message with EdgeSecVersion + gateway ID
                         val version = this.EdgeSecVersion.encodeToByteArray()
@@ -327,10 +358,12 @@ class EdgeSecFramework() : IEdgeSec {
 
                         print("Sending handshake: " + handshakeHelloMessage.decodeByteArrayToHexString())
 
+                        timingHandshakeHelloStart = System.currentTimeMillis()
                         //Send HandshakeHello message
                         this.transportPlugin!!.sendHandshakeHello(deviceID, handshakeHelloMessage)
                             .subscribe(
                                 { handShakeHelloResult ->
+                                    timingHandshakeHelloFinish = System.currentTimeMillis()
                                     if (!handShakeHelloResult)
                                         emitter.onError(Exception("Failed to send handshakeHello"))
                                     else {
@@ -339,10 +372,12 @@ class EdgeSecFramework() : IEdgeSec {
                                         // Invoke TransportPlugin to read message from device with following content:
                                         // - ID do objeto
 
+                                        timingHandshakeResponseStart = System.currentTimeMillis()
                                         // Read HandshakeHello response
                                         this.transportPlugin!!.readHandshakeResponse(deviceID)
                                             .subscribe(
                                                 { handshakeResponse ->
+                                                    timingHandshakeResponseFinish = System.currentTimeMillis()
                                                     var lastIndexRead = 0
 
                                                     // Get Device Authentication ID
@@ -407,12 +442,16 @@ class EdgeSecFramework() : IEdgeSec {
     ): Single<ByteArray?> {
         // Invoke TransportPlugin to send hellomessage
         return Single.create { emitter ->
+            timingSendHelloMessageStart = System.currentTimeMillis()
             transportPlugin!!.sendHelloMessage(deviceID, helloMessage).subscribe({
+                timingSendHelloMessageFinish = System.currentTimeMillis()
                 if (!it)
                     emitter.onError(Exception("Failed to send helloMessage"))
                 else {
+                    timingReadHelloMessageResponseStart = System.currentTimeMillis()
                     // Invoke TransportPlugin to read HelloMessage response
                     transportPlugin!!.readHelloMessageResponse(deviceID).subscribe({
+                        timingReadHelloMessageResponseFinish = System.currentTimeMillis()
                         if (it != null) {
                             emitter.onSuccess(it)
                         } else {
@@ -501,6 +540,24 @@ class EdgeSecFramework() : IEdgeSec {
                 selectedCryptoPlugin = selectedPlugin
             }
         }
+    }
+
+    internal fun calculate_auth_time_performance() {
+        print("[TIME] Basic Connected: " + (timingConnectFinish - timingSecureConnectStart) )
+        print("[TIME] Send handshake hello: " + (timingHandshakeHelloFinish - timingHandshakeHelloStart) )
+        print("[TIME] Read handshake response: " + (timingHandshakeResponseFinish - timingHandshakeResponseStart) )
+        print("[TIME] Create Hello Message: " + (timingCreateHelloMessageFinish - timingCreateHelloMessageStart) )
+        print("[TIME] Send Hello Message: " + (timingSendHelloMessageFinish - timingSendHelloMessageStart) )
+        print("[TIME] Receive Hello Message Response: " + (timingReadHelloMessageResponseFinish - timingReadHelloMessageResponseStart) )
+        print("[TIME] Verify Hello Message: " + (timingVerifyHelloMessageFinish - timingVerifyHelloMessageStart) )
+        print("[TIME] Total time to authenticate: " + (timingSecureConnectFinish - timingConnectFinish) )
+        print("[TIME] Total time to connect and authenticate: " + (timingSecureConnectFinish - timingSecureConnectStart) )
+    }
+
+    internal fun calculate_read_time_performance() {
+        print("[TIME] Secure Read Received: " + (timingSecureReadReceived - timingSecureReadStart) )
+        print("[TIME] Verify Secure Read: " + (timingSecureReadFinish - timingSecureReadVerifyStart) )
+        print("[TIME] Total time to secure read: " + (timingSecureReadFinish - timingSecureReadStart) )
     }
 
     internal fun setAuthorizationProvider(provider: IAuthorizationProvider) {

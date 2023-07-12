@@ -8,6 +8,7 @@ import br.pucrio.inf.lac.contextnetcore.ContextNetCore.decodeByteArrayToHexStrin
 import br.pucrio.inf.lac.edgesecinterfaces.IAuthenticationPlugin
 import br.pucrio.inf.lac.edgesecinterfaces.ICryptographicPlugin
 import br.pucrio.inf.lac.hmacmd5authentication.HmacMD5
+import br.pucrio.inf.lac.hmacsha1authentication.HmacSHA1
 import br.pucrio.inf.lac.rc4cryptography.RC4
 import com.google.gson.Gson
 
@@ -32,9 +33,9 @@ object ContextNetCore : IAuthorizationProvider {
     )
 
     private val objectsSupportedProtocolSuites = mapOf<String, Array<String>>(
-        "0879C623C9C8" to arrayOf<String>("RC4_HMAC_MD5", "AES128_HMAC_MD5"),
-        "24:6F:28:B5:D8:3A" to arrayOf<String>("RC4_HMAC_MD5"),
-        "ID_DEVICE0" to arrayOf<String>("RC4_HMAC_MD5"),
+        "0879C623C9C8" to arrayOf<String>("RC4_HMAC_MD5", "RC4_HMAC_SHA1", "AES128_HMAC_MD5"),
+        "24:6F:28:B5:D8:3A" to arrayOf<String>("RC4_HMAC_MD5", "RC4_HMAC_SHA1"),
+        "ID_DEVICE0" to arrayOf<String>("RC4_HMAC_MD5", "RC4_HMAC_SHA1"),
     )
     private val objectsAuthorizedGateways = mapOf<String, Array<String>>(
         "0879C623C9C8" to arrayOf<String>("736DF76FC9KU", "LK9JD765JKO9"),
@@ -48,7 +49,7 @@ object ContextNetCore : IAuthorizationProvider {
     )
 
     private var authPlugins = mapOf<String, IAuthenticationPlugin>(
-        "HMAC_SHA1" to HmacMD5(), // TODO: REPLACE WITH HMAC_SHA1 IMPLEMENTATION
+        "HMAC_SHA1" to HmacSHA1(),
         "HMAC_MD5" to HmacMD5(),
     )
 
@@ -83,7 +84,7 @@ object ContextNetCore : IAuthorizationProvider {
             getAuthPlugin(selectedProtocolSuite) ?: return Pair(false, "Failed to get auth plugin")
 
         // Generate authentication values
-        val otpChallenge = cryptoPlugin.generateSecureRandomToken(Constants.OTP_BYTES_SIZE)
+        val otpChallenge = cryptoPlugin.generateSecureRandomToken(Constants.OTP_CHALLENGE_BYTES_SIZE)
         print("otpChallenge (${otpChallenge.size}): " + otpChallenge.decodeByteArrayToHexString())
         val sessionKey = generateSessionKey(Constants.SESSION_KEY_BYTES_SIZE, cryptoPlugin)
         print("sessionKey (${sessionKey.size}): " + sessionKey.decodeByteArrayToHexString())
