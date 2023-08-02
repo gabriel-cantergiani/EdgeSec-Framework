@@ -369,6 +369,8 @@ class BLE(
                         TAG,
                         "$characteristicName Characteristic read successfully: " + it.decodeByteArrayToHexString()
                     )
+
+                    print(TAG + "$characteristicName Characteristic read successfully: " + it.decodeByteArrayToHexString())
                     emitter.onSuccess(it)
                 },
                 {

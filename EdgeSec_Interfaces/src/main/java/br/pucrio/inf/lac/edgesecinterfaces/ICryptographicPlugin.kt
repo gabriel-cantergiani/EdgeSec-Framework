@@ -66,4 +66,7 @@ interface ICryptographicPlugin {
             - ByteArray representing decrypted data
      */
     fun decrypt(cipher: ByteArray, key: ByteArray): ByteArray;
+
+    /* Return size in bytes of the secret key of protocol implemented by plugin */
+    fun getSecretKeySize(): Int;
 }

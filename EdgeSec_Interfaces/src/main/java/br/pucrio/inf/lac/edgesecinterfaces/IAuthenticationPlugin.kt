@@ -21,7 +21,7 @@ interface IAuthenticationPlugin {
     fun getProtocolID(): String;
 
     /*
-        Sign data using provided key with the protocol implemented by plugin
+        Get the Message Authentication Code (MAC) signature data using provided key with the protocol implemented by plugin
 
         Parameters:
             - data: ByteArray representing data to be signed
@@ -30,20 +30,20 @@ interface IAuthenticationPlugin {
         Returns:
             - ByteArray representing generated signature
      */
-    fun sign(data: ByteArray, key: Key): ByteArray;
+    fun getMACSignature(data: ByteArray, key: Key): ByteArray;
 
     /*
-        Verify a signature
+        Verify a Message Authentication Code (MAC) signature
 
         Parameters:
             - data: ByteArray representing data of the signature to be verified
             - key: Key object used for signature
-            - signature: ByteArray representing signature to be verified
+            - signature: ByteArray representing the Message Authentication Code signature to be verified
 
         Returns:
             - True if signature is valid and false otherwise
      */
-    fun verifySignature(data: ByteArray, key: Key, signature: ByteArray): Boolean;
+    fun verifyMACSignature(data: ByteArray, key: Key, signature: ByteArray): Boolean;
 
     /*
         Generate a hash value using hashing function implemented by plugin
